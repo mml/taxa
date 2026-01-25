@@ -20,7 +20,12 @@ class MetricsTracker:
 
         Args:
             count: Number of items to add (default: 1)
+
+        Raises:
+            ValueError: If count is negative
         """
+        if count < 0:
+            raise ValueError(f"count must be non-negative, got {count}")
         self.processed += count
 
     def increment_api_calls(self, count: int = 1) -> None:
@@ -28,7 +33,12 @@ class MetricsTracker:
 
         Args:
             count: Number of API calls to add (default: 1)
+
+        Raises:
+            ValueError: If count is negative
         """
+        if count < 0:
+            raise ValueError(f"count must be non-negative, got {count}")
         self.api_calls += count
 
     def get_processing_rate(self) -> float:
