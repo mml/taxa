@@ -587,6 +587,398 @@ git commit -m "feat: add proof-of-concept performance testing script"
 
 ---
 
+### Task 4a: Fix Pagination Limit with id_above
+
+**Context:** PoC testing revealed that iNaturalist API has a 10,000 result limit per search. Fetching Rosaceae (309k taxa) hits 403 Forbidden at page 51. Need to use `id_above` parameter to work around this.
+
+**Files:**
+- Modify: `src/taxa/fetcher.py`
+- Modify: `tests/test_fetcher.py`
+
+**Step 1: Write failing test for id_above pagination**
+
+Add to `tests/test_fetcher.py`:
+
+```python
+def test_fetch_taxon_descendants_uses_id_above_for_large_sets():
+    """Test that fetcher uses id_above to handle >10k results."""
+    with patch('taxa.fetcher.get_taxa') as mock_get_taxa:
+        # Simulate hitting the 10k limit, then using id_above
+        mock_get_taxa.side_effect = [
+            # First batch (pages 1-50)
+            {
+                'total_results': 20000,
+                'results': [{'id': i, 'name': f'Species {i}'} for i in range(1, 201)]
+            },
+            # More pages until we hit 10k
+            *[{
+                'total_results': 20000,
+                'results': [{'id': i, 'name': f'Species {i}'} for i in range(j*200+1, j*200+201)]
+            } for j in range(1, 49)],
+            # Last page before limit
+            {
+                'total_results': 20000,
+                'results': [{'id': i, 'name': f'Species {i}'} for i in range(9801, 10001)]
+            },
+            # Now use id_above=10000
+            {
+                'total_results': 20000,
+                'results': [{'id': i, 'name': f'Species {i}'} for i in range(10001, 10201)]
+            },
+            # Continue with id_above
+            *[{
+                'total_results': 20000,
+                'results': [{'id': i, 'name': f'Species {i}'} for i in range(j*200+1, min(j*200+201, 20001))]
+            } for j in range(51, 100)]
+        ]
+
+        results = list(fetch_taxon_descendants(taxon_id=47125, per_page=200))
+
+        # Verify we got all results across the pagination boundary
+        assert len(results) == 20000
+        # Check that id_above was used in calls after the 50th page
+        call_args_list = mock_get_taxa.call_args_list
+        # After 50 pages (10k results), should start using id_above
+        assert any('id_above' in str(call) for call in call_args_list[50:])
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_fetcher.py::test_fetch_taxon_descendants_uses_id_above_for_large_sets -v`
+Expected: FAIL - current implementation doesn't use id_above
+
+**Step 3: Update fetcher to use id_above**
+
+Modify `src/taxa/fetcher.py`:
+
+```python
+"""Fetch taxonomic data from iNaturalist API."""
+from typing import Iterator, Dict, Any, Optional
+from pyinaturalist import get_taxa
+
+
+# iNaturalist API limit: 10,000 results per search
+MAX_RESULTS_PER_SEARCH = 10000
+
+
+def fetch_taxon_descendants(
+    taxon_id: int,
+    per_page: int = 200,
+    max_results: Optional[int] = None
+) -> Iterator[Dict[str, Any]]:
+    """
+    Fetch all descendant taxa for a given taxon ID.
+
+    Handles iNaturalist's 10,000 result limit by using id_above parameter
+    to paginate through large result sets.
+
+    Args:
+        taxon_id: iNaturalist taxon ID
+        per_page: Results per API call (max 200)
+        max_results: Maximum total results to fetch (None = all)
+
+    Yields:
+        Taxon dictionaries from API
+    """
+    total_fetched = 0
+    id_above = None
+
+    while True:
+        page = 1
+        batch_count = 0
+
+        # Fetch up to 10k results in this batch
+        while batch_count < MAX_RESULTS_PER_SEARCH:
+            params = {
+                'taxon_id': taxon_id,
+                'per_page': per_page,
+                'page': page
+            }
+
+            if id_above is not None:
+                params['id_above'] = id_above
+
+            response = get_taxa(**params)
+            results = response.get('results', [])
+
+            if not results:
+                # No more results
+                return
+
+            for taxon in results:
+                yield taxon
+                total_fetched += 1
+                batch_count += 1
+
+                if max_results and total_fetched >= max_results:
+                    return
+
+            # Check if we've fetched all available results
+            total_results = response.get('total_results', 0)
+            if total_fetched >= total_results:
+                return
+
+            page += 1
+
+            # If we're approaching the 10k limit, break and start new batch
+            if batch_count >= MAX_RESULTS_PER_SEARCH - per_page:
+                break
+
+        # Start next batch with id_above set to highest ID from this batch
+        if results:
+            id_above = max(taxon['id'] for taxon in results)
+        else:
+            break
+```
+
+**Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_fetcher.py -v`
+Expected: All tests PASS
+
+**Step 5: Commit**
+
+```bash
+git add src/taxa/fetcher.py tests/test_fetcher.py
+git commit -m "fix: handle 10k pagination limit with id_above parameter
+
+iNaturalist API returns 403 after 10k results per search. Use id_above
+parameter to fetch large result sets in batches.
+
+Fixes issue discovered during Rosaceae PoC test (309k taxa)."
+```
+
+---
+
+### Task 4b: Update PoC Script with Better Error Handling
+
+**Files:**
+- Modify: `scripts/poc_performance.py`
+
+**Step 1: Add error handling and progress improvements**
+
+Modify `scripts/poc_performance.py`:
+
+```python
+#!/usr/bin/env python3
+"""
+Proof-of-concept: Test performance of fetching large taxon in a region.
+
+Usage:
+    python scripts/poc_performance.py --taxon-id 47125 --timeout 300
+
+This script validates whether the API fetching approach scales acceptably.
+It runs with a timeout and reports progress metrics for extrapolation.
+"""
+import argparse
+import signal
+import sys
+from taxa.fetcher import fetch_taxon_descendants
+from taxa.metrics import MetricsTracker
+from pyinaturalist import get_taxa
+
+
+class TimeoutError(Exception):
+    """Raised when timeout is exceeded."""
+    pass
+
+
+def timeout_handler(signum, frame):
+    """Handle timeout signal."""
+    raise TimeoutError()
+
+
+def estimate_total_descendants(taxon_id: int) -> int:
+    """Make a quick API call to get total descendant count."""
+    response = get_taxa(taxon_id=taxon_id, per_page=1)
+    return response.get('total_results', 0)
+
+
+def run_poc(taxon_id: int, timeout_seconds: int) -> None:
+    """
+    Run proof-of-concept fetch with timeout and progress reporting.
+
+    Args:
+        taxon_id: iNaturalist taxon ID to fetch
+        timeout_seconds: Timeout in seconds (0 = no timeout)
+    """
+    print(f"Estimating total descendants for taxon {taxon_id}...")
+    try:
+        total = estimate_total_descendants(taxon_id)
+    except Exception as e:
+        print(f"ERROR: Failed to estimate descendants: {e}")
+        sys.exit(1)
+
+    print(f"Estimated total: {total:,} taxa\n")
+
+    if total == 0:
+        print("ERROR: No descendants found. Check taxon ID.")
+        sys.exit(1)
+
+    tracker = MetricsTracker(total_items=total)
+
+    # Set up timeout if specified
+    if timeout_seconds > 0:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout_seconds)
+        print(f"Running with {timeout_seconds}s timeout...\n")
+    else:
+        print("Running without timeout (Ctrl+C to abort)...\n")
+
+    try:
+        for taxon in fetch_taxon_descendants(taxon_id):
+            tracker.increment_processed()
+
+            # Track API calls (approximately 1 per page of 200)
+            if tracker.processed % 200 == 0:
+                tracker.increment_api_calls()
+
+            # Print progress every 1000 taxa for large sets, 100 for small
+            interval = 1000 if total > 10000 else 100
+            if tracker.processed % interval == 0:
+                progress_pct = (tracker.processed / total) * 100
+                print(f"Progress: {tracker.processed:,} / {total:,} taxa ({progress_pct:.1f}%)...")
+
+        # Completed successfully
+        if timeout_seconds > 0:
+            signal.alarm(0)  # Cancel timeout
+
+        print("\n" + "="*60)
+        print("COMPLETED SUCCESSFULLY")
+        print("="*60)
+        print(tracker.format_report())
+
+    except (TimeoutError, KeyboardInterrupt):
+        # Timeout or user interrupt
+        if timeout_seconds > 0:
+            signal.alarm(0)  # Cancel timeout
+
+        print("\n" + "="*60)
+        print("INTERRUPTED - PERFORMANCE ESTIMATE")
+        print("="*60)
+        print(tracker.format_report())
+        print("\nConclusion:")
+
+        est_time = tracker.estimate_completion_time()
+        if est_time:
+            hours = est_time / 3600
+            if hours > 2:
+                print(f"  ⚠️  Full sync would take ~{hours:.1f} hours")
+                print("  Consider revising approach:")
+                print("    - Fetch at higher taxonomic levels")
+                print("    - Use bulk taxonomy export + aggregate observations only")
+                print("    - Batch requests differently")
+            elif hours > 0.5:
+                print(f"  ⚠️  Full sync would take ~{hours*60:.0f} minutes")
+                print("  Acceptable but slow. Consider optimizations.")
+            else:
+                print(f"  ✓ Full sync would take ~{hours*60:.0f} minutes")
+                print("  Performance looks acceptable.")
+
+    except Exception as e:
+        # Unexpected error
+        if timeout_seconds > 0:
+            signal.alarm(0)
+
+        print("\n" + "="*60)
+        print("ERROR")
+        print("="*60)
+        print(f"Unexpected error: {e}")
+        print(f"\nProgress before error:")
+        print(tracker.format_report())
+        sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Proof-of-concept: Test API fetch performance"
+    )
+    parser.add_argument(
+        '--taxon-id',
+        type=int,
+        required=True,
+        help='iNaturalist taxon ID to test (e.g., 47125 for Rosaceae)'
+    )
+    parser.add_argument(
+        '--timeout',
+        type=int,
+        default=300,
+        help='Timeout in seconds (default: 300, 0 = no timeout)'
+    )
+
+    args = parser.parse_args()
+
+    print("="*60)
+    print("TAXA PROOF-OF-CONCEPT PERFORMANCE TEST")
+    print("="*60)
+    print()
+
+    run_poc(args.taxon_id, args.timeout)
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Step 2: Test with Quercus again**
+
+Run: `python scripts/poc_performance.py --taxon-id 47851 --timeout 60`
+Expected: Completes successfully with better progress reporting
+
+**Step 3: Commit**
+
+```bash
+git add scripts/poc_performance.py
+git commit -m "improve: better error handling and progress reporting in PoC script"
+```
+
+---
+
+### Task 4c: Re-test with Rosaceae
+
+**Goal:** Verify that the id_above fix allows us to fetch large taxa like Rosaceae.
+
+**Step 1: Run full Rosaceae test**
+
+Run: `python scripts/poc_performance.py --taxon-id 47125 --timeout 300`
+
+Expected: Either completes successfully or times out with good progress estimate showing it would work given enough time
+
+**Step 2: Document results**
+
+Create a file `docs/poc_results.md`:
+
+```markdown
+# Proof-of-Concept Results
+
+## Test 1: Quercus (genus)
+- Taxon ID: 47851
+- Total taxa: 725
+- Time: < 1 second
+- API calls: 3
+- Result: ✅ PASS - Very fast for small/medium genera
+
+## Test 2: Rosaceae (family)
+- Taxon ID: 47125
+- Total taxa: 309,188
+- Time: [FILL IN ACTUAL TIME OR TIMEOUT]
+- API calls: [FILL IN ACTUAL COUNT]
+- Result: [FILL IN PASS/TIMEOUT WITH ESTIMATE]
+
+## Conclusion
+
+[Based on results, document whether the approach scales acceptably]
+```
+
+**Step 3: Commit results**
+
+```bash
+git add docs/poc_results.md
+git commit -m "docs: add proof-of-concept test results"
+```
+
+---
+
 ## Phase 2: Core Functionality
 
 **Note:** Only proceed with Phase 2 if proof-of-concept shows acceptable performance. If performance is unacceptable, pause and discuss alternative approaches with Matt.
