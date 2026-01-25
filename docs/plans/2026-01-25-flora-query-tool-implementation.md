@@ -10,6 +10,29 @@
 
 ---
 
+## Development Environment
+
+**CRITICAL:** All tasks use a Python virtual environment with explicit paths.
+
+**Setup (already done in worktree):**
+```bash
+python3 -m venv venv
+venv/bin/pip install -e '.[dev]'
+```
+
+**For ALL tasks:**
+- **Run tests:** `venv/bin/pytest tests/test_*.py -v`
+- **Run Python:** `venv/bin/python -m taxa.cli` or `venv/bin/python scripts/...`
+- **Install deps:** `venv/bin/pip install <package>`
+
+**IMPORTANT:**
+- Never use bare `pytest` or `python` commands
+- Never activate the venv with `source venv/bin/activate`
+- Always use full `venv/bin/` paths
+- This ensures consistent, isolated environment across all operations
+
+---
+
 ## Phase 1: Proof of Concept (Critical Path)
 
 **Goal:** Validate that API fetching strategy scales acceptably before building full tool.
@@ -76,10 +99,13 @@ mkdir -p src/taxa tests
 touch src/taxa/__init__.py tests/__init__.py
 ```
 
-**Step 4: Install dependencies**
+**Step 4: Create venv and install dependencies**
 
-Run: `pip install -e '.[dev]'`
-Expected: Dependencies installed successfully
+```bash
+python3 -m venv venv
+venv/bin/pip install -e '.[dev]'
+```
+Expected: venv created, dependencies installed successfully
 
 **Step 5: Commit**
 
@@ -141,7 +167,7 @@ def test_metrics_tracker_estimates_completion():
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_metrics.py -v`
+Run: `venv/bin/pytest tests/test_metrics.py -v`
 Expected: FAIL with "cannot import name 'MetricsTracker'"
 
 **Step 3: Implement MetricsTracker**
@@ -223,7 +249,7 @@ class MetricsTracker:
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_metrics.py -v`
+Run: `venv/bin/pytest tests/test_metrics.py -v`
 Expected: All tests PASS
 
 **Step 5: Commit**
@@ -296,7 +322,7 @@ def test_fetch_taxon_descendants_handles_pagination():
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_fetcher.py -v`
+Run: `venv/bin/pytest tests/test_fetcher.py -v`
 Expected: FAIL with "cannot import name 'fetch_taxon_descendants'"
 
 **Step 3: Implement basic fetcher**
@@ -356,7 +382,7 @@ def fetch_taxon_descendants(
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_fetcher.py -v`
+Run: `venv/bin/pytest tests/test_fetcher.py -v`
 Expected: All tests PASS
 
 **Step 5: Commit**
@@ -526,7 +552,7 @@ chmod +x scripts/poc_performance.py
 
 **Step 3: Test with small taxon (manual verification)**
 
-Run: `python scripts/poc_performance.py --taxon-id 47851 --timeout 60`
+Run: `venv/bin/pythonscripts/poc_performance.py --taxon-id 47851 --timeout 60`
 
 Expected: Script runs, fetches some taxa, shows progress report
 Note: This is manual verification - no automated test for this script
@@ -672,7 +698,7 @@ taxa:
 
 **Step 2: Run tests to verify they fail**
 
-Run: `pytest tests/test_config.py -v`
+Run: `venv/bin/pytest tests/test_config.py -v`
 Expected: FAIL with import errors
 
 **Step 3: Implement Config class**
@@ -762,7 +788,7 @@ class Config:
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_config.py -v`
+Run: `venv/bin/pytest tests/test_config.py -v`
 Expected: All tests PASS
 
 **Step 5: Commit**
@@ -853,7 +879,7 @@ def test_create_schema_creates_indexes(tmp_path):
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_schema.py -v`
+Run: `venv/bin/pytest tests/test_schema.py -v`
 Expected: FAIL with import error
 
 **Step 3: Implement schema creation**
@@ -954,7 +980,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_schema.py -v`
+Run: `venv/bin/pytest tests/test_schema.py -v`
 Expected: All tests PASS
 
 **Step 5: Commit**
@@ -1046,7 +1072,7 @@ def test_flatten_taxon_ancestry_handles_missing_ranks():
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_transform.py -v`
+Run: `venv/bin/pytest tests/test_transform.py -v`
 Expected: FAIL with import error
 
 **Step 3: Implement flatten_taxon_ancestry**
@@ -1129,7 +1155,7 @@ def flatten_taxon_ancestry(taxon: Dict[str, Any]) -> Dict[str, Any]:
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_transform.py -v`
+Run: `venv/bin/pytest tests/test_transform.py -v`
 Expected: All tests PASS
 
 **Step 5: Commit**
@@ -1221,10 +1247,10 @@ if __name__ == '__main__':
 
 **Step 2: Test CLI manually**
 
-Run: `python -m taxa.cli --help`
+Run: `venv/bin/python-m taxa.cli --help`
 Expected: Help text showing all commands
 
-Run: `python -m taxa.cli sync --help`
+Run: `venv/bin/python-m taxa.cli sync --help`
 Expected: Help text for sync command
 
 **Step 3: Test entry point**
@@ -1297,7 +1323,7 @@ def test_fetch_observation_summary():
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_observations.py -v`
+Run: `venv/bin/pytest tests/test_observations.py -v`
 Expected: FAIL with import error
 
 **Step 3: Implement observation fetcher**
@@ -1374,7 +1400,7 @@ def fetch_observation_summary(
 
 **Step 4: Run tests to verify they pass**
 
-Run: `pytest tests/test_observations.py -v`
+Run: `venv/bin/pytest tests/test_observations.py -v`
 Expected: All tests PASS
 
 **Step 5: Commit**

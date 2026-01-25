@@ -37,6 +37,24 @@ config.yaml → pyinaturalist API → SQLite DB → user SQL queries
 - `click` or `argparse` - CLI
 - `requests` (via pyinaturalist)
 
+## Development Environment Setup
+
+**Virtual Environment:** All development uses a Python virtual environment to ensure consistent dependencies.
+
+**Setup (one-time):**
+```bash
+python3 -m venv venv
+venv/bin/pip install -e '.[dev]'
+```
+
+**Usage (all commands):**
+- Run tests: `venv/bin/pytest tests/ -v`
+- Run CLI: `venv/bin/python -m taxa.cli`
+- Run scripts: `venv/bin/python scripts/poc_performance.py`
+- Install new deps: `venv/bin/pip install <package>`
+
+**Important:** Always use explicit `venv/bin/` paths. Never activate the venv - just reference the binaries directly. This ensures all agents and scripts use the same isolated environment without environment variable dependencies.
+
 ## Config File Format
 
 **config.yaml:**
