@@ -66,11 +66,13 @@ def fetch_taxon_descendants(
 
             page += 1
 
-            # If we're approaching the 10k limit, break and start new batch
+            # Break before hitting exactly 10k results to leave room for one more page
+            # (prevents exceeding the API's 10,000 result limit)
             if batch_count >= MAX_RESULTS_PER_SEARCH - per_page:
                 break
 
-        # Start next batch with id_above set to highest ID from this batch
+        # Note: Assumes API returns results in ascending ID order, allowing us to use
+        # the max ID from the final page as the starting point for the next batch
         if results:
             id_above = max(taxon['id'] for taxon in results)
         else:
