@@ -1,15 +1,22 @@
 """Fetch taxonomic data from iNaturalist API."""
-from typing import Iterator, Dict, Any
+from typing import Iterator, Dict, Any, Optional
 from pyinaturalist import get_taxa
+
+
+# iNaturalist API limit: 10,000 results per search
+MAX_RESULTS_PER_SEARCH = 10000
 
 
 def fetch_taxon_descendants(
     taxon_id: int,
     per_page: int = 200,
-    max_results: int = None
+    max_results: Optional[int] = None
 ) -> Iterator[Dict[str, Any]]:
     """
     Fetch all descendant taxa for a given taxon ID.
+
+    Handles iNaturalist's 10,000 result limit by using id_above parameter
+    to paginate through large result sets.
 
     Args:
         taxon_id: iNaturalist taxon ID
@@ -19,30 +26,52 @@ def fetch_taxon_descendants(
     Yields:
         Taxon dictionaries from API
     """
-    page = 1
     total_fetched = 0
+    id_above = None
 
     while True:
-        response = get_taxa(
-            taxon_id=taxon_id,
-            per_page=per_page,
-            page=page
-        )
+        page = 1
+        batch_count = 0
 
-        results = response.get('results', [])
-        if not results:
-            break
+        # Fetch up to 10k results in this batch
+        while batch_count < MAX_RESULTS_PER_SEARCH:
+            params = {
+                'taxon_id': taxon_id,
+                'per_page': per_page,
+                'page': page
+            }
 
-        for taxon in results:
-            yield taxon
-            total_fetched += 1
+            if id_above is not None:
+                params['id_above'] = id_above
 
-            if max_results and total_fetched >= max_results:
+            response = get_taxa(**params)
+            results = response.get('results', [])
+
+            if not results:
+                # No more results
                 return
 
-        # Check if we've fetched all available results
-        total_results = response.get('total_results', 0)
-        if total_fetched >= total_results:
-            break
+            for taxon in results:
+                yield taxon
+                total_fetched += 1
+                batch_count += 1
 
-        page += 1
+                if max_results and total_fetched >= max_results:
+                    return
+
+            # Check if we've fetched all available results
+            total_results = response.get('total_results', 0)
+            if total_fetched >= total_results:
+                return
+
+            page += 1
+
+            # If we're approaching the 10k limit, break and start new batch
+            if batch_count >= MAX_RESULTS_PER_SEARCH - per_page:
+                break
+
+        # Start next batch with id_above set to highest ID from this batch
+        if results:
+            id_above = max(taxon['id'] for taxon in results)
+        else:
+            break
