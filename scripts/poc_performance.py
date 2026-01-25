@@ -41,7 +41,11 @@ def run_poc(taxon_id: int, timeout_seconds: int) -> None:
         timeout_seconds: Timeout in seconds (0 = no timeout)
     """
     print(f"Estimating total descendants for taxon {taxon_id}...")
-    total = estimate_total_descendants(taxon_id)
+    try:
+        total = estimate_total_descendants(taxon_id)
+    except Exception as e:
+        print(f"ERROR: Failed to estimate descendants: {e}")
+        sys.exit(1)
     print(f"Estimated total: {total:,} taxa\n")
 
     if total == 0:
@@ -66,9 +70,11 @@ def run_poc(taxon_id: int, timeout_seconds: int) -> None:
             if tracker.processed % 200 == 0:
                 tracker.increment_api_calls()
 
-            # Print progress every 100 taxa
-            if tracker.processed % 100 == 0:
-                print(f"Progress: {tracker.processed:,} / {total:,} taxa...")
+            # Print progress every 1000 taxa for large sets, 100 for small
+            interval = 1000 if total > 10000 else 100
+            if tracker.processed % interval == 0:
+                progress_pct = (tracker.processed / total) * 100
+                print(f"Progress: {tracker.processed:,} / {total:,} taxa ({progress_pct:.1f}%)...")
 
         # Completed successfully
         if timeout_seconds > 0:
@@ -105,6 +111,19 @@ def run_poc(taxon_id: int, timeout_seconds: int) -> None:
             else:
                 print(f"  ✓ Full sync would take ~{hours*60:.0f} minutes")
                 print("  Performance looks acceptable.")
+
+    except Exception as e:
+        # Unexpected error
+        if timeout_seconds > 0:
+            signal.alarm(0)
+
+        print("\n" + "="*60)
+        print("ERROR")
+        print("="*60)
+        print(f"Unexpected error: {e}")
+        print(f"\nProgress before error:")
+        print(tracker.format_report())
+        sys.exit(1)
 
 
 def main():
