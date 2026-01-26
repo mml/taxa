@@ -11,7 +11,7 @@ def main():
 
 
 @main.command()
-@click.argument('config', default='config.yaml')
+@click.argument('config', type=click.Path(), default='config.yaml')
 @click.option('--timeout', type=int, default=0, help='Timeout in seconds (0 = no timeout)')
 @click.option('--dry-run', is_flag=True, help='Estimate only, do not fetch/store')
 def sync(config, timeout, dry_run):
