@@ -88,3 +88,80 @@ taxa:
 
     with pytest.raises(ConfigError, match="taxon_id"):
         Config.from_file(config_file)
+
+
+def test_config_validates_empty_place_ids(tmp_path):
+    """Test that place_ids cannot be empty."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+database: ./flora.db
+
+regions:
+  sfba:
+    name: "SF Bay Area"
+    place_ids: []
+
+taxa:
+  rosaceae:
+    name: "Rosaceae"
+    taxon_id: 47125
+""")
+
+    with pytest.raises(ConfigError, match="place_ids must not be empty"):
+        Config.from_file(config_file)
+
+
+def test_config_validates_place_ids_are_integers(tmp_path):
+    """Test that place_ids must contain only integers."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+database: ./flora.db
+
+regions:
+  sfba:
+    name: "SF Bay Area"
+    place_ids: [5245, "invalid", 5678]
+
+taxa:
+  rosaceae:
+    name: "Rosaceae"
+    taxon_id: 47125
+""")
+
+    with pytest.raises(ConfigError, match="place_ids must contain only integers"):
+        Config.from_file(config_file)
+
+
+def test_config_handles_permission_error(tmp_path):
+    """Test that PermissionError is wrapped in ConfigError."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+database: ./flora.db
+
+regions:
+  sfba:
+    name: "SF Bay Area"
+    place_ids: [5245]
+
+taxa:
+  rosaceae:
+    name: "Rosaceae"
+    taxon_id: 47125
+""")
+
+    # Remove read permissions from the file
+    config_file.chmod(0o000)
+
+    try:
+        with pytest.raises(ConfigError, match="Cannot read config file"):
+            Config.from_file(config_file)
+    finally:
+        # Restore permissions for cleanup
+        config_file.chmod(0o644)
+
+
+def test_config_handles_is_directory_error(tmp_path):
+    """Test that IsADirectoryError is wrapped in ConfigError."""
+    # Try to load a directory as a config file
+    with pytest.raises(ConfigError, match="Cannot read config file"):
+        Config.from_file(tmp_path)

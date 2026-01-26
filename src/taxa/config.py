@@ -1,7 +1,7 @@
 """Configuration file parsing and validation."""
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 
 class ConfigError(Exception):
@@ -47,6 +47,12 @@ class Config:
             if not isinstance(region['place_ids'], list):
                 raise ConfigError(f"Region '{key}' place_ids must be a list")
 
+            if not region['place_ids']:
+                raise ConfigError(f"Region '{key}' place_ids must not be empty")
+
+            if not all(isinstance(pid, int) for pid in region['place_ids']):
+                raise ConfigError(f"Region '{key}' place_ids must contain only integers")
+
         # Validate each taxon
         for key, taxon in self.taxa.items():
             if not isinstance(taxon, dict):
@@ -71,6 +77,8 @@ class Config:
             raise ConfigError(f"Invalid YAML: {e}")
         except FileNotFoundError:
             raise ConfigError(f"Config file not found: {path}")
+        except OSError as e:
+            raise ConfigError(f"Cannot read config file: {e}")
 
         if not isinstance(data, dict):
             raise ConfigError("Config file must contain a YAML dictionary")
