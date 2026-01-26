@@ -1,5 +1,7 @@
 """Command-line interface for taxa tool."""
 import click
+import subprocess
+import sqlite3
 import sys
 from pathlib import Path
 from taxa.config import Config, ConfigError
@@ -31,14 +33,38 @@ def sync(config, timeout, dry_run):
 
 @main.command()
 @click.argument('query', required=False)
-def query(query):
+@click.option('--database', '-d', default='flora.db', help='Database file path')
+def query(query, database):
     """Run SQL query against database or open interactive shell."""
+    if not Path(database).exists():
+        click.echo(f"ERROR: Database not found: {database}", err=True)
+        click.echo("Run 'taxa sync' first to create the database")
+        sys.exit(1)
+
     if query:
-        click.echo(f"Running query: {query}")
-        click.echo("(Not yet implemented)")
+        # Run single query
+        conn = sqlite3.connect(database)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(query)
+            results = cursor.fetchall()
+
+            # Print column headers
+            if cursor.description:
+                headers = [desc[0] for desc in cursor.description]
+                click.echo('\t'.join(headers))
+
+            # Print results
+            for row in results:
+                click.echo('\t'.join(str(val) for val in row))
+        except sqlite3.Error as e:
+            click.echo(f"ERROR: {e}", err=True)
+            sys.exit(1)
+        finally:
+            conn.close()
     else:
-        click.echo("Opening interactive SQLite shell...")
-        click.echo("(Not yet implemented)")
+        # Open interactive shell
+        subprocess.run(['sqlite3', database])
 
 
 @main.group()
