@@ -1,3 +1,5 @@
+import pytest
+
 from taxa.transform import flatten_taxon_ancestry
 
 
@@ -63,3 +65,43 @@ def test_flatten_taxon_ancestry_handles_missing_ranks():
     assert result['subfamily'] is None
     assert result['tribe'] is None
     assert result['genus'] is None
+
+
+def test_flatten_taxon_ancestry_requires_id():
+    """Test that missing id raises ValueError."""
+    taxon = {'name': 'Test', 'rank': 'species'}
+    with pytest.raises(ValueError, match="missing required fields.*id"):
+        flatten_taxon_ancestry(taxon)
+
+
+def test_flatten_taxon_ancestry_requires_name():
+    """Test that missing name raises ValueError."""
+    taxon = {'id': 123, 'rank': 'species'}
+    with pytest.raises(ValueError, match="missing required fields.*name"):
+        flatten_taxon_ancestry(taxon)
+
+
+def test_flatten_taxon_ancestry_requires_rank():
+    """Test that missing rank raises ValueError."""
+    taxon = {'id': 123, 'name': 'Test'}
+    with pytest.raises(ValueError, match="missing required fields.*rank"):
+        flatten_taxon_ancestry(taxon)
+
+
+def test_flatten_taxon_ancestry_handles_malformed_ancestors():
+    """Test that malformed ancestors are skipped gracefully."""
+    taxon = {
+        'id': 123,
+        'name': 'Test species',
+        'rank': 'species',
+        'ancestors': [
+            {'id': 1, 'name': 'Plantae', 'rank': 'kingdom'},
+            {'id': 2, 'name': 'Bad'},  # Missing 'rank'
+            {'id': 3, 'rank': 'family'},  # Missing 'name'
+            {'id': 4, 'name': 'Rosaceae', 'rank': 'family'},
+        ]
+    }
+
+    result = flatten_taxon_ancestry(taxon)
+    assert result['kingdom'] == 'Plantae'
+    assert result['family'] == 'Rosaceae'
