@@ -59,12 +59,19 @@ def fetch_taxon_descendants(
                 if max_results and total_fetched >= max_results:
                     return
 
-            # Check if we've fetched all available results
-            total_results = response.get('total_results', 0)
-            if total_fetched >= total_results:
+            page += 1
+
+            # Check if result set is incomplete (fewer than per_page items returned).
+            # This indicates we've reached the end of the dataset.
+            if len(results) < per_page:
                 return
 
-            page += 1
+            # Also check total_results, but only when it's reliably below the API limit
+            # (if total_results == 10000, it may be capped by the API's search limit)
+            total_results = response.get('total_results', 0)
+            if total_results > 0 and total_results < MAX_RESULTS_PER_SEARCH:
+                if total_fetched >= total_results:
+                    return
 
             # Break before hitting exactly 10k results to leave room for one more page
             # (prevents exceeding the API's 10,000 result limit)

@@ -75,7 +75,12 @@ def test_fetch_taxon_descendants_uses_id_above_for_large_sets():
             *[{
                 'total_results': 20000,
                 'results': [{'id': i, 'name': f'Species {i}'} for i in range(j*200+1, min(j*200+201, 20001))]
-            } for j in range(51, 100)]
+            } for j in range(51, 100)],
+            # Final response: empty results to signal end of data
+            {
+                'total_results': 20000,
+                'results': []
+            }
         ]
 
         results = list(fetch_taxon_descendants(taxon_id=47125, per_page=200))
