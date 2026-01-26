@@ -62,12 +62,14 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
                     INSERT OR REPLACE INTO taxa (
                         id, scientific_name, common_name, rank,
                         kingdom, phylum, class, order_name, family,
-                        subfamily, tribe, genus, species,
+                        subfamily, tribe, subtribe, genus, subgenus,
+                        section, subsection, species, subspecies, variety, form,
                         is_active, iconic_taxon
                     ) VALUES (
                         :id, :scientific_name, :common_name, :rank,
                         :kingdom, :phylum, :class, :order_name, :family,
-                        :subfamily, :tribe, :genus, :species,
+                        :subfamily, :tribe, :subtribe, :genus, :subgenus,
+                        :section, :subsection, :species, :subspecies, :variety, :form,
                         :is_active, :iconic_taxon
                     )
                 """, row)
@@ -118,10 +120,16 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
         conn.close()
 
     # Atomic database replacement
-    if os.path.exists(config.database):
-        backup = f"{config.database}~"
-        print(f"Backing up old database to: {backup}")
-        os.rename(config.database, backup)
+    try:
+        if os.path.exists(config.database):
+            backup = f"{config.database}~"
+            print(f"Backing up old database to: {backup}")
+            os.rename(config.database, backup)
 
-    print(f"Replacing database: {config.database}")
-    os.rename(temp_db, config.database)
+        print(f"Replacing database: {config.database}")
+        os.rename(temp_db, config.database)
+    except OSError as e:
+        # Clean up temp file on failure
+        if os.path.exists(temp_db):
+            os.remove(temp_db)
+        raise RuntimeError(f"Failed to replace database: {e}")
