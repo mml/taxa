@@ -1,14 +1,14 @@
 """Fetch observation data from iNaturalist API."""
 from typing import Dict, Any, Optional
 from pyinaturalist import get_observation_species_counts, get_observation_histogram
-from datetime import datetime
+from requests.exceptions import RequestException
 
 
 def fetch_observation_summary(
     taxon_id: int,
     place_id: int,
     quality_grade: Optional[str] = None
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """
     Fetch aggregated observation data for a taxon in a place.
 
@@ -42,6 +42,8 @@ def fetch_observation_summary(
         'observation_count': result['count'],
         'observer_count': None,  # Not available in this endpoint
         'research_grade_count': None,  # Would need separate call
+        'first_observed': None,
+        'last_observed': None,
     }
 
     # Get histogram for date range
@@ -65,21 +67,8 @@ def fetch_observation_summary(
                     if month_nums:
                         summary['first_observed'] = f"Month {month_nums[0]}"
                         summary['last_observed'] = f"Month {month_nums[-1]}"
-                    else:
-                        summary['first_observed'] = None
-                        summary['last_observed'] = None
-                else:
-                    summary['first_observed'] = None
-                    summary['last_observed'] = None
-            else:
-                summary['first_observed'] = None
-                summary['last_observed'] = None
-        else:
-            summary['first_observed'] = None
-            summary['last_observed'] = None
-    except Exception:
+    except (KeyError, ValueError, RequestException):
         # Histogram call might fail, not critical
-        summary['first_observed'] = None
-        summary['last_observed'] = None
+        pass
 
     return summary
