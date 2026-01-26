@@ -2,6 +2,8 @@
 import click
 import sys
 from pathlib import Path
+from taxa.config import Config, ConfigError
+from taxa.sync import sync_database
 
 
 @click.group()
@@ -11,13 +13,20 @@ def main():
 
 
 @main.command()
-@click.argument('config', type=click.Path(), default='config.yaml')
+@click.argument('config', type=click.Path(exists=True), default='config.yaml')
 @click.option('--timeout', type=int, default=0, help='Timeout in seconds (0 = no timeout)')
 @click.option('--dry-run', is_flag=True, help='Estimate only, do not fetch/store')
 def sync(config, timeout, dry_run):
     """Sync data from iNaturalist API to database."""
-    click.echo(f"Syncing from config: {config}")
-    click.echo("(Not yet implemented)")
+    try:
+        cfg = Config.from_file(Path(config))
+        sync_database(cfg, dry_run=dry_run)
+    except ConfigError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        click.echo("\nSync interrupted by user")
+        sys.exit(1)
 
 
 @main.command()
