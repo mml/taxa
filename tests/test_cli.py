@@ -75,17 +75,78 @@ def test_sync_command_help():
 def test_query_command_with_query():
     """Test query command with SQL query."""
     runner = CliRunner()
-    result = runner.invoke(main, ['query', 'SELECT 1'])
-    assert result.exit_code == 0
-    assert 'Running query: SELECT 1' in result.output
+    with runner.isolated_filesystem():
+        # Create a test database
+        import sqlite3
+        conn = sqlite3.connect('flora.db')
+        conn.execute('CREATE TABLE test (id INTEGER, name TEXT)')
+        conn.execute('INSERT INTO test VALUES (1, "foo"), (2, "bar")')
+        conn.commit()
+        conn.close()
+
+        result = runner.invoke(main, ['query', 'SELECT * FROM test'])
+        assert result.exit_code == 0
+        # Verify headers and data
+        lines = result.output.strip().split('\n')
+        assert lines[0] == 'id\tname'
+        assert '1\tfoo' in result.output
+        assert '2\tbar' in result.output
 
 
 def test_query_command_without_query():
     """Test query command without query (interactive mode)."""
     runner = CliRunner()
-    result = runner.invoke(main, ['query'])
-    assert result.exit_code == 0
-    assert 'Opening interactive SQLite shell' in result.output
+    with runner.isolated_filesystem():
+        # Create a test database
+        import sqlite3
+        conn = sqlite3.connect('flora.db')
+        conn.close()
+
+        # Mock subprocess.run to avoid actually launching interactive shell
+        with patch('taxa.cli.subprocess.run') as mock_run:
+            result = runner.invoke(main, ['query'])
+            assert result.exit_code == 0
+            # Verify subprocess was called with sqlite3
+            mock_run.assert_called_once_with(['sqlite3', 'flora.db'])
+
+
+def test_query_command_database_not_found():
+    """Test query command with missing database."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        result = runner.invoke(main, ['query', 'SELECT 1'])
+        assert result.exit_code == 1
+        assert 'Database not found' in result.output
+        assert 'taxa sync' in result.output
+
+
+def test_query_command_sql_error():
+    """Test query command with invalid SQL."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        conn = sqlite3.connect('flora.db')
+        conn.close()
+
+        result = runner.invoke(main, ['query', 'INVALID SQL'])
+        assert result.exit_code == 1
+        assert 'ERROR:' in result.output
+
+
+def test_query_command_custom_database():
+    """Test query command with custom database path."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        conn = sqlite3.connect('custom.db')
+        conn.execute('CREATE TABLE test (val INTEGER)')
+        conn.execute('INSERT INTO test VALUES (42)')
+        conn.commit()
+        conn.close()
+
+        result = runner.invoke(main, ['query', '--database', 'custom.db', 'SELECT * FROM test'])
+        assert result.exit_code == 0
+        assert '42' in result.output
 
 
 def test_search_places_command():
