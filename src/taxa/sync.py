@@ -52,9 +52,14 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
         for taxon_key, taxon_config in config.taxa.items():
             print(f"\nFetching taxon: {taxon_config['name']} (ID: {taxon_config['taxon_id']})")
 
+            # Progress reporting callback
+            def progress_callback(items_fetched):
+                if items_fetched % 100 == 0:
+                    print(f"Fetched {items_fetched} taxa...")
+
             # Fetch all descendant taxa
             taxon_id = taxon_config['taxon_id']
-            for taxon in fetch_taxon_descendants(taxon_id):
+            for taxon in fetch_taxon_descendants(taxon_id, progress_callback=progress_callback):
                 # Flatten and insert taxon
                 row = flatten_taxon_ancestry(taxon)
 

@@ -247,3 +247,29 @@ def test_sync_database_prints_progress(test_config, capsys):
         assert "Building database:" in captured.out
         assert "Fetching taxon: Test Taxon (ID: 47851)" in captured.out
         assert "Sync complete!" in captured.out
+
+
+def test_sync_database_prints_fetch_progress(test_config, capsys):
+    """Test that sync prints progress during taxa fetching."""
+    # Create mock taxa
+    mock_taxa = [
+        {'id': i, 'name': f'Species {i}', 'rank': 'species', 'ancestors': []}
+        for i in range(1, 251)  # 250 taxa
+    ]
+
+    # Create a mock that yields items and calls the callback
+    def mock_fetch(taxon_id, progress_callback=None):
+        for i, taxon in enumerate(mock_taxa, 1):
+            yield taxon
+            if progress_callback:
+                progress_callback(items_fetched=i)
+
+    with patch('taxa.sync.fetch_taxon_descendants', side_effect=mock_fetch), \
+         patch('taxa.sync.fetch_observation_summary', return_value=None):
+
+        sync_database(test_config)
+
+        captured = capsys.readouterr()
+        # Should print progress at intervals (e.g., every 100 taxa)
+        assert "Fetched 100 taxa..." in captured.out
+        assert "Fetched 200 taxa..." in captured.out

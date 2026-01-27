@@ -111,3 +111,59 @@ def test_fetch_taxon_descendants_retries_on_network_error():
 
         assert len(results) == 1
         assert mock_get_taxa.call_count == 2  # Failed once, succeeded once
+
+
+def test_fetch_taxon_descendants_calls_progress_callback_with_items_fetched():
+    """Test that progress callback is called after each item is yielded."""
+    with patch('taxa.fetcher.get_taxa') as mock_get_taxa:
+        mock_get_taxa.side_effect = [
+            {
+                'total_results': 5,
+                'results': [
+                    {'id': 1, 'name': 'Species 1'},
+                    {'id': 2, 'name': 'Species 2'},
+                    {'id': 3, 'name': 'Species 3'},
+                ]
+            },
+            {
+                'total_results': 5,
+                'results': [
+                    {'id': 4, 'name': 'Species 4'},
+                    {'id': 5, 'name': 'Species 5'},
+                ]
+            }
+        ]
+
+        callback = Mock()
+        results = list(fetch_taxon_descendants(
+            taxon_id=47125,
+            per_page=3,
+            progress_callback=callback
+        ))
+
+        assert len(results) == 5
+        # Callback should be called once per item yielded
+        assert callback.call_count == 5
+        # Check that it was called with increasing counts
+        callback.assert_any_call(items_fetched=1)
+        callback.assert_any_call(items_fetched=2)
+        callback.assert_any_call(items_fetched=3)
+        callback.assert_any_call(items_fetched=4)
+        callback.assert_any_call(items_fetched=5)
+
+
+def test_fetch_taxon_descendants_works_without_progress_callback():
+    """Test that progress callback is optional."""
+    with patch('taxa.fetcher.get_taxa') as mock_get_taxa:
+        mock_get_taxa.return_value = {
+            'total_results': 2,
+            'results': [
+                {'id': 1, 'name': 'Species 1'},
+                {'id': 2, 'name': 'Species 2'},
+            ]
+        }
+
+        # Should work without progress_callback parameter
+        results = list(fetch_taxon_descendants(taxon_id=47125, per_page=2))
+
+        assert len(results) == 2
