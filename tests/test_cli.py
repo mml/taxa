@@ -152,25 +152,74 @@ def test_query_command_custom_database():
 def test_search_places_command():
     """Test search places command."""
     runner = CliRunner()
-    result = runner.invoke(main, ['search', 'places', 'test'])
+
+    with patch('taxa.cli.get_places_autocomplete') as mock_places:
+        mock_places.return_value = {
+            'results': [
+                {'id': 123, 'display_name': 'Test Place, CA, US'},
+                {'id': 456, 'display_name': 'Another Test'}
+            ]
+        }
+
+        result = runner.invoke(main, ['search', 'places', 'test'])
+
     assert result.exit_code == 0
-    assert 'Searching places for: test' in result.output
+    assert "Places matching 'test':" in result.output
+    assert '123' in result.output
+    assert 'Test Place, CA, US' in result.output
 
 
 def test_search_taxa_command():
     """Test search taxa command."""
     runner = CliRunner()
-    result = runner.invoke(main, ['search', 'taxa', 'Rosaceae'])
+
+    with patch('taxa.cli.get_taxa_autocomplete') as mock_taxa:
+        mock_taxa.return_value = {
+            'results': [
+                {
+                    'id': 47125,
+                    'name': 'Rosaceae',
+                    'rank': 'family',
+                    'preferred_common_name': 'rose family'
+                }
+            ]
+        }
+
+        result = runner.invoke(main, ['search', 'taxa', 'Rosaceae'])
+
     assert result.exit_code == 0
-    assert 'Searching taxa for: Rosaceae' in result.output
+    assert "Taxa matching 'Rosaceae':" in result.output
+    assert '47125' in result.output
+    assert 'Rosaceae' in result.output
+    assert 'rose family' in result.output
 
 
 def test_info_command():
     """Test info command."""
     runner = CliRunner()
-    result = runner.invoke(main, ['info'])
-    assert result.exit_code == 0
-    assert 'Database info:' in result.output
+    with runner.isolated_filesystem():
+        import sqlite3
+        from taxa.schema import create_schema
+        from datetime import datetime
+
+        # Create database with schema
+        conn = sqlite3.connect('flora.db')
+        create_schema(conn)
+
+        # Insert some test data
+        conn.execute("INSERT INTO sync_info (key, value) VALUES (?, ?)",
+                    ('last_sync', datetime.now().isoformat()))
+        conn.execute("INSERT INTO taxa (id, scientific_name, rank) VALUES (1, 'Test', 'species')")
+        conn.execute("INSERT INTO observations (taxon_id, region_key, place_id, observation_count) VALUES (1, 'test', 123, 10)")
+        conn.commit()
+        conn.close()
+
+        result = runner.invoke(main, ['info'])
+
+        assert result.exit_code == 0
+        assert 'Database: flora.db' in result.output
+        assert 'Taxa: 1' in result.output
+        assert 'Total observations: 10' in result.output
 
 
 def test_sync_command_missing_config():

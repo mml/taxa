@@ -126,34 +126,39 @@ def info(database):
     conn = sqlite3.connect(database)
     cursor = conn.cursor()
 
-    # Get sync info
-    cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
-    row = cursor.fetchone()
-    last_sync = row[0] if row else "Never"
+    try:
+        # Get sync info
+        cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
+        row = cursor.fetchone()
+        last_sync = row[0] if row else "Never"
 
-    # Get counts
-    cursor.execute("SELECT COUNT(*) FROM taxa")
-    taxa_count = cursor.fetchone()[0]
+        # Get counts
+        cursor.execute("SELECT COUNT(*) FROM taxa")
+        taxa_count = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT region_key) FROM observations")
-    region_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT region_key) FROM observations")
+        region_count = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM observations")
-    obs_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM observations")
+        obs_count = cursor.fetchone()[0]
 
-    cursor.execute("SELECT SUM(observation_count) FROM observations")
-    total_obs = cursor.fetchone()[0] or 0
+        cursor.execute("SELECT SUM(observation_count) FROM observations")
+        total_obs = cursor.fetchone()[0] or 0
 
-    # Display info
-    click.echo(f"Database: {database}")
-    click.echo(f"Last sync: {last_sync}")
-    click.echo()
-    click.echo(f"Taxa: {taxa_count:,}")
-    click.echo(f"Regions: {region_count}")
-    click.echo(f"Region-taxon combinations: {obs_count:,}")
-    click.echo(f"Total observations: {total_obs:,}")
+        # Display info
+        click.echo(f"Database: {database}")
+        click.echo(f"Last sync: {last_sync}")
+        click.echo()
+        click.echo(f"Taxa: {taxa_count:,}")
+        click.echo(f"Regions: {region_count}")
+        click.echo(f"Region-taxon combinations: {obs_count:,}")
+        click.echo(f"Total observations: {total_obs:,}")
 
-    conn.close()
+    except sqlite3.Error as e:
+        click.echo(f"ERROR: Database error: {e}", err=True)
+        sys.exit(1)
+    finally:
+        conn.close()
 
 
 if __name__ == '__main__':
