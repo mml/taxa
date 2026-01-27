@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from taxa.config import Config, ConfigError
 from taxa.sync import sync_database
+from pyinaturalist import get_places_autocomplete, get_taxa_autocomplete
 
 
 @click.group()
@@ -77,23 +78,82 @@ def search():
 @click.argument('query')
 def places(query):
     """Search for place IDs."""
-    click.echo(f"Searching places for: {query}")
-    click.echo("(Not yet implemented)")
+    try:
+        response = get_places_autocomplete(q=query, per_page=10)
+        results = response.get('results', [])
+
+        if not results:
+            click.echo(f"No places found for: {query}")
+            return
+
+        click.echo(f"Places matching '{query}':\n")
+        for place in results:
+            click.echo(f"  {place['id']:8d} - {place['display_name']}")
+    except Exception as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
 
 
 @search.command()
 @click.argument('query')
 def taxa(query):
     """Search for taxon IDs."""
-    click.echo(f"Searching taxa for: {query}")
-    click.echo("(Not yet implemented)")
+    try:
+        response = get_taxa_autocomplete(q=query, per_page=10)
+        results = response.get('results', [])
+
+        if not results:
+            click.echo(f"No taxa found for: {query}")
+            return
+
+        click.echo(f"Taxa matching '{query}':\n")
+        for taxon in results:
+            common = f" ({taxon.get('preferred_common_name', '')})" if taxon.get('preferred_common_name') else ""
+            click.echo(f"  {taxon['id']:8d} - {taxon['name']}{common} [{taxon['rank']}]")
+    except Exception as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
 
 
 @main.command()
-def info():
+@click.option('--database', '-d', default='flora.db', help='Database file path')
+def info(database):
     """Show database info and stats."""
-    click.echo("Database info:")
-    click.echo("(Not yet implemented)")
+    if not Path(database).exists():
+        click.echo(f"ERROR: Database not found: {database}", err=True)
+        sys.exit(1)
+
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
+
+    # Get sync info
+    cursor.execute("SELECT value FROM sync_info WHERE key = 'last_sync'")
+    row = cursor.fetchone()
+    last_sync = row[0] if row else "Never"
+
+    # Get counts
+    cursor.execute("SELECT COUNT(*) FROM taxa")
+    taxa_count = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(DISTINCT region_key) FROM observations")
+    region_count = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM observations")
+    obs_count = cursor.fetchone()[0]
+
+    cursor.execute("SELECT SUM(observation_count) FROM observations")
+    total_obs = cursor.fetchone()[0] or 0
+
+    # Display info
+    click.echo(f"Database: {database}")
+    click.echo(f"Last sync: {last_sync}")
+    click.echo()
+    click.echo(f"Taxa: {taxa_count:,}")
+    click.echo(f"Regions: {region_count}")
+    click.echo(f"Region-taxon combinations: {obs_count:,}")
+    click.echo(f"Total observations: {total_obs:,}")
+
+    conn.close()
 
 
 if __name__ == '__main__':
