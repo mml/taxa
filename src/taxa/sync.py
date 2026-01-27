@@ -67,7 +67,9 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
                 fetch_taxon_descendants(taxon_id),
                 total=estimated_total,
                 desc=f"Fetching {taxon_config['name']}",
-                unit="taxa",
+                unit="taxon",
+                smoothing=0.1,
+                colour='green',
                 disable=None  # Auto-disables if not a TTY
             ):
                 # Flatten and insert taxon
