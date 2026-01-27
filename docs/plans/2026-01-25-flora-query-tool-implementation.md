@@ -1804,6 +1804,476 @@ git commit -m "feat: add observation data fetcher"
 
 ---
 
+### Task 9a: API Retry Wrapper with Exponential Backoff
+
+**Files:**
+- Create: `src/taxa/retry.py`
+- Create: `tests/test_retry.py`
+
+**Step 1: Write failing tests**
+
+Create `tests/test_retry.py`:
+
+```python
+import pytest
+import time
+from unittest.mock import Mock, patch
+from taxa.retry import with_retry, RateLimitError
+
+
+def test_with_retry_succeeds_on_first_attempt():
+    """Test that successful calls don't retry."""
+    mock_func = Mock(return_value={"data": "success"})
+
+    result = with_retry(mock_func, arg1="test")
+
+    assert result == {"data": "success"}
+    assert mock_func.call_count == 1
+
+
+def test_with_retry_handles_network_errors():
+    """Test exponential backoff for network errors."""
+    mock_func = Mock(side_effect=[
+        ConnectionError("Network error"),
+        ConnectionError("Network error"),
+        {"data": "success"}
+    ])
+
+    with patch('time.sleep') as mock_sleep:
+        result = with_retry(mock_func)
+
+    assert result == {"data": "success"}
+    assert mock_func.call_count == 3
+    # Should have slept with exponential backoff: 1s, 2s
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_any_call(1)
+    mock_sleep.assert_any_call(2)
+
+
+def test_with_retry_handles_429_rate_limit():
+    """Test that 429 errors trigger exponential backoff."""
+    error_429 = Exception("429 Client Error: Too Many Requests")
+
+    mock_func = Mock(side_effect=[
+        error_429,
+        {"data": "success"}
+    ])
+
+    with patch('time.sleep') as mock_sleep:
+        result = with_retry(mock_func)
+
+    assert result == {"data": "success"}
+    assert mock_func.call_count == 2
+    mock_sleep.assert_called_once_with(1)
+
+
+def test_with_retry_gives_up_after_max_attempts():
+    """Test that retry gives up after max attempts."""
+    mock_func = Mock(side_effect=ConnectionError("Network error"))
+
+    with patch('time.sleep'):
+        with pytest.raises(ConnectionError):
+            with_retry(mock_func, max_attempts=3)
+
+    assert mock_func.call_count == 3
+
+
+def test_with_retry_handles_timeout_errors():
+    """Test that timeout errors are retried."""
+    mock_func = Mock(side_effect=[
+        TimeoutError("Request timeout"),
+        {"data": "success"}
+    ])
+
+    with patch('time.sleep') as mock_sleep:
+        result = with_retry(mock_func)
+
+    assert result == {"data": "success"}
+    assert mock_func.call_count == 2
+```
+
+**Step 2: Run tests to verify they fail**
+
+Run: `pytest tests/test_retry.py -v`
+Expected: FAIL with import errors
+
+**Step 3: Implement retry wrapper**
+
+Create `src/taxa/retry.py`:
+
+```python
+"""Retry wrapper with exponential backoff for API calls."""
+import time
+import logging
+from typing import Callable, Any, TypeVar
+from functools import wraps
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar('T')
+
+
+class RateLimitError(Exception):
+    """Raised when API rate limit is hit."""
+    pass
+
+
+def with_retry(
+    func: Callable[..., T],
+    *args,
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    **kwargs
+) -> T:
+    """
+    Retry a function with exponential backoff.
+
+    Handles network errors, timeouts, and rate limiting (429 errors).
+
+    Args:
+        func: Function to retry
+        *args: Positional arguments to pass to func
+        max_attempts: Maximum number of attempts (default 3)
+        base_delay: Initial delay in seconds (default 1.0)
+        max_delay: Maximum delay in seconds (default 60.0)
+        **kwargs: Keyword arguments to pass to func
+
+    Returns:
+        Result from successful function call
+
+    Raises:
+        Exception: Re-raises the last exception if all attempts fail
+    """
+    last_exception = None
+
+    for attempt in range(max_attempts):
+        try:
+            return func(*args, **kwargs)
+
+        except Exception as e:
+            last_exception = e
+            error_str = str(e)
+
+            # Check if this is a retryable error
+            is_network_error = isinstance(e, (ConnectionError, TimeoutError))
+            is_rate_limit = '429' in error_str or 'Too Many Requests' in error_str
+
+            if not (is_network_error or is_rate_limit):
+                # Not a retryable error, raise immediately
+                raise
+
+            # Last attempt, don't sleep, just raise
+            if attempt == max_attempts - 1:
+                logger.error(f"Failed after {max_attempts} attempts: {e}")
+                raise
+
+            # Calculate delay with exponential backoff
+            delay = min(base_delay * (2 ** attempt), max_delay)
+
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_attempts} failed: {e}. "
+                f"Retrying in {delay}s..."
+            )
+
+            time.sleep(delay)
+
+    # Should never reach here, but just in case
+    raise last_exception
+
+
+def retry_on_rate_limit(max_attempts: int = 3):
+    """
+    Decorator to add retry logic to a function.
+
+    Usage:
+        @retry_on_rate_limit(max_attempts=5)
+        def my_api_call():
+            return api.get(...)
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            return with_retry(func, *args, max_attempts=max_attempts, **kwargs)
+        return wrapper
+    return decorator
+```
+
+**Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_retry.py -v`
+Expected: All tests PASS
+
+**Step 5: Commit**
+
+```bash
+git add src/taxa/retry.py tests/test_retry.py
+git commit -m "feat: add API retry wrapper with exponential backoff
+
+Implements retry logic for network errors, timeouts, and 429 rate limits.
+Uses exponential backoff with configurable max attempts and delays."
+```
+
+---
+
+### Task 9b: Update Observation Fetcher to Use Retry
+
+**Files:**
+- Modify: `src/taxa/observations.py`
+- Modify: `tests/test_observations.py`
+
+**Step 1: Write test for retry behavior**
+
+Add to `tests/test_observations.py`:
+
+```python
+from unittest.mock import patch, Mock
+
+
+def test_fetch_observation_summary_retries_on_429():
+    """Test that 429 errors are retried."""
+    error_429 = Exception("429 Client Error: Too Many Requests")
+
+    with patch('taxa.observations.get_observation_species_counts') as mock_counts:
+        mock_counts.side_effect = [
+            error_429,
+            {
+                'results': [
+                    {'taxon': {'id': 123}, 'count': 50}
+                ]
+            }
+        ]
+
+        with patch('taxa.observations.get_observation_histogram') as mock_hist:
+            mock_hist.return_value = {'results': {}}
+
+            with patch('time.sleep'):  # Don't actually sleep in tests
+                result = fetch_observation_summary(
+                    taxon_id=47125,
+                    place_id=14
+                )
+
+        assert result is not None
+        assert result['taxon_id'] == 123
+        assert mock_counts.call_count == 2  # Failed once, succeeded once
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_observations.py::test_fetch_observation_summary_retries_on_429 -v`
+Expected: FAIL (no retry logic yet)
+
+**Step 3: Update observations.py to use retry**
+
+Modify `src/taxa/observations.py`:
+
+```python
+"""Fetch observation data from iNaturalist API."""
+from typing import Dict, Any, Optional
+from pyinaturalist import get_observation_species_counts, get_observation_histogram
+from datetime import datetime
+
+from taxa.retry import with_retry
+
+
+def fetch_observation_summary(
+    taxon_id: int,
+    place_id: int,
+    quality_grade: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Fetch aggregated observation data for a taxon in a place.
+
+    Uses retry logic to handle rate limits and network errors.
+
+    Args:
+        taxon_id: iNaturalist taxon ID
+        place_id: iNaturalist place ID
+        quality_grade: Filter by quality (research, needs_id, casual, or None)
+
+    Returns:
+        Dictionary with observation_count, observer_count, date ranges
+    """
+    params = {
+        'taxon_id': taxon_id,
+        'place_id': place_id,
+    }
+
+    if quality_grade:
+        params['quality_grade'] = quality_grade
+
+    # Get species counts (includes observation counts) with retry
+    counts_response = with_retry(
+        get_observation_species_counts,
+        **params
+    )
+
+    if not counts_response.get('results'):
+        return None
+
+    # Take first result (should be the taxon itself)
+    result = counts_response['results'][0]
+
+    summary = {
+        'taxon_id': result['taxon']['id'],
+        'observation_count': result['count'],
+        'observer_count': None,  # Not available in this endpoint
+        'research_grade_count': None,  # Would need separate call
+    }
+
+    # Get histogram for date range with retry
+    try:
+        hist_response = with_retry(
+            get_observation_histogram,
+            date_field='observed',
+            **params
+        )
+
+        # Extract date range from histogram
+        # Histogram returns month_of_year or other intervals
+        # For now, just mark that we have temporal data
+        if hist_response.get('results'):
+            summary['first_observed'] = None  # TODO: parse from histogram
+            summary['last_observed'] = None   # TODO: parse from histogram
+    except Exception:
+        # Histogram call might fail, not critical
+        summary['first_observed'] = None
+        summary['last_observed'] = None
+
+    return summary
+```
+
+**Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_observations.py -v`
+Expected: All tests PASS
+
+**Step 5: Commit**
+
+```bash
+git add src/taxa/observations.py tests/test_observations.py
+git commit -m "feat: add retry logic to observation fetcher
+
+Wraps API calls with retry logic to handle 429 rate limits and
+network errors with exponential backoff."
+```
+
+---
+
+### Task 9c: Update Taxa Fetcher to Use Retry
+
+**Files:**
+- Modify: `src/taxa/fetcher.py`
+- Modify: `tests/test_fetcher.py`
+
+**Step 1: Write test for retry behavior**
+
+Add to `tests/test_fetcher.py`:
+
+```python
+def test_fetch_taxon_descendants_retries_on_network_error():
+    """Test that network errors are retried."""
+    with patch('taxa.fetcher.get_taxa') as mock_get_taxa:
+        mock_get_taxa.side_effect = [
+            ConnectionError("Network error"),
+            {
+                'total_results': 1,
+                'results': [
+                    {'id': 1, 'name': 'Test Species', 'rank': 'species'}
+                ]
+            }
+        ]
+
+        with patch('time.sleep'):  # Don't actually sleep in tests
+            results = list(fetch_taxon_descendants(taxon_id=47125, per_page=1))
+
+        assert len(results) == 1
+        assert mock_get_taxa.call_count == 2  # Failed once, succeeded once
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `pytest tests/test_fetcher.py::test_fetch_taxon_descendants_retries_on_network_error -v`
+Expected: FAIL (no retry logic yet)
+
+**Step 3: Update fetcher.py to use retry**
+
+Modify `src/taxa/fetcher.py`:
+
+```python
+"""Fetch taxonomic data from iNaturalist API."""
+from typing import Iterator, Dict, Any
+from pyinaturalist import get_taxa
+
+from taxa.retry import with_retry
+
+
+def fetch_taxon_descendants(
+    taxon_id: int,
+    per_page: int = 200,
+    max_results: int = None
+) -> Iterator[Dict[str, Any]]:
+    """
+    Fetch all descendant taxa for a given taxon ID.
+
+    Uses retry logic to handle rate limits and network errors.
+
+    Args:
+        taxon_id: iNaturalist taxon ID
+        per_page: Results per API call (max 200)
+        max_results: Maximum total results to fetch (None = all)
+
+    Yields:
+        Taxon dictionaries from API
+    """
+    page = 1
+    total_fetched = 0
+
+    while True:
+        # Wrap API call with retry logic
+        response = with_retry(
+            get_taxa,
+            taxon_id=taxon_id,
+            per_page=per_page,
+            page=page
+        )
+
+        results = response.get('results', [])
+        if not results:
+            break
+
+        for taxon in results:
+            yield taxon
+            total_fetched += 1
+
+            if max_results and total_fetched >= max_results:
+                return
+
+        # Check if we've fetched all available results
+        total_results = response.get('total_results', 0)
+        if total_fetched >= total_results:
+            break
+
+        page += 1
+```
+
+**Step 4: Run tests to verify they pass**
+
+Run: `pytest tests/test_fetcher.py -v`
+Expected: All tests PASS
+
+**Step 5: Commit**
+
+```bash
+git add src/taxa/fetcher.py tests/test_fetcher.py
+git commit -m "feat: add retry logic to taxa fetcher
+
+Wraps get_taxa API calls with retry logic to handle 429 rate limits
+and network errors with exponential backoff."
+```
+
+---
+
 ### Task 10: Complete Sync Command
 
 **Files:**
