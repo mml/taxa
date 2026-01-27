@@ -1,0 +1,30 @@
+# Taxa Query Tool Configuration
+# See: docs/plans/2026-01-25-flora-query-tool-implementation.md
+
+database: ./flora.db
+
+# Geographic regions to track
+regions:
+  north_coast:
+    name: "North Coast California"
+    place_ids: [14, 1038, 1039]  # Mendocino, Humboldt, Del Norte
+
+  sfba:
+    name: "San Francisco Bay Area"
+    place_ids: [5246]
+
+# Taxa of interest (can be any rank)
+taxa:
+  rosaceae:
+    name: "Rosaceae"
+    taxon_id: 47125
+    notes: "Rose family - includes roses, stone fruits, apples"
+
+  oaks:
+    name: "Quercus (Oaks)"
+    taxon_id: 47851
+    notes: "All oak species"
+
+# Optional filters
+filters:
+  quality_grade: research  # research, needs_id, casual, or omit for all
