@@ -1,5 +1,5 @@
 from taxa.observations import fetch_observation_summary
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 
 def test_fetch_observation_summary():
@@ -79,3 +79,31 @@ def test_fetch_observation_summary_histogram_failure():
         result = fetch_observation_summary(47125, 14)
         assert result['first_observed'] is None
         assert result['last_observed'] is None
+
+
+def test_fetch_observation_summary_retries_on_429():
+    """Test that 429 errors are retried."""
+    error_429 = Exception("429 Client Error: Too Many Requests")
+
+    with patch('taxa.observations.get_observation_species_counts') as mock_counts:
+        mock_counts.side_effect = [
+            error_429,
+            {
+                'results': [
+                    {'taxon': {'id': 123}, 'count': 50}
+                ]
+            }
+        ]
+
+        with patch('taxa.observations.get_observation_histogram') as mock_hist:
+            mock_hist.return_value = {'results': {}}
+
+            with patch('time.sleep'):  # Don't actually sleep in tests
+                result = fetch_observation_summary(
+                    taxon_id=47125,
+                    place_id=14
+                )
+
+        assert result is not None
+        assert result['taxon_id'] == 123
+        assert mock_counts.call_count == 2  # Failed once, succeeded once

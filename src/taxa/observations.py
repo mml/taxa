@@ -3,6 +3,8 @@ from typing import Dict, Any, Optional
 from pyinaturalist import get_observation_species_counts, get_observation_histogram
 from requests.exceptions import RequestException
 
+from taxa.retry import with_retry
+
 
 def fetch_observation_summary(
     taxon_id: int,
@@ -11,6 +13,8 @@ def fetch_observation_summary(
 ) -> Optional[Dict[str, Any]]:
     """
     Fetch aggregated observation data for a taxon in a place.
+
+    Uses retry logic to handle rate limits and network errors.
 
     Args:
         taxon_id: iNaturalist taxon ID
@@ -28,8 +32,11 @@ def fetch_observation_summary(
     if quality_grade:
         params['quality_grade'] = quality_grade
 
-    # Get species counts (includes observation counts)
-    counts_response = get_observation_species_counts(**params)
+    # Get species counts (includes observation counts) with retry
+    counts_response = with_retry(
+        get_observation_species_counts,
+        **params
+    )
 
     if not counts_response.get('results'):
         return None
@@ -46,9 +53,10 @@ def fetch_observation_summary(
         'last_observed': None,
     }
 
-    # Get histogram for date range
+    # Get histogram for date range with retry
     try:
-        hist_response = get_observation_histogram(
+        hist_response = with_retry(
+            get_observation_histogram,
             date_field='observed',
             **params
         )
