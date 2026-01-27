@@ -91,3 +91,23 @@ def test_fetch_taxon_descendants_uses_id_above_for_large_sets():
         call_args_list = mock_get_taxa.call_args_list
         # After 50 pages (10k results), should start using id_above
         assert any('id_above' in str(call) for call in call_args_list[50:])
+
+
+def test_fetch_taxon_descendants_retries_on_network_error():
+    """Test that network errors are retried."""
+    with patch('taxa.fetcher.get_taxa') as mock_get_taxa:
+        mock_get_taxa.side_effect = [
+            ConnectionError("Network error"),
+            {
+                'total_results': 1,
+                'results': [
+                    {'id': 1, 'name': 'Test Species', 'rank': 'species'}
+                ]
+            }
+        ]
+
+        with patch('time.sleep'):  # Don't actually sleep in tests
+            results = list(fetch_taxon_descendants(taxon_id=47125, per_page=1))
+
+        assert len(results) == 1
+        assert mock_get_taxa.call_count == 2  # Failed once, succeeded once

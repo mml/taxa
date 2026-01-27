@@ -2,6 +2,8 @@
 from typing import Iterator, Dict, Any, Optional
 from pyinaturalist import get_taxa
 
+from taxa.retry import with_retry
+
 
 # iNaturalist API limit: 10,000 results per search
 MAX_RESULTS_PER_SEARCH = 10000
@@ -16,7 +18,8 @@ def fetch_taxon_descendants(
     Fetch all descendant taxa for a given taxon ID.
 
     Handles iNaturalist's 10,000 result limit by using id_above parameter
-    to paginate through large result sets.
+    to paginate through large result sets. Uses retry logic to handle rate
+    limits and network errors with exponential backoff.
 
     Args:
         taxon_id: iNaturalist taxon ID
@@ -44,7 +47,11 @@ def fetch_taxon_descendants(
             if id_above is not None:
                 params['id_above'] = id_above
 
-            response = get_taxa(**params)
+            # Wrap API call with retry logic
+            response = with_retry(
+                get_taxa,
+                **params
+            )
             results = response.get('results', [])
 
             if not results:
