@@ -273,3 +273,39 @@ def test_sync_database_prints_fetch_progress(test_config, capsys):
         # Should print progress at intervals (e.g., every 100 taxa)
         assert "Fetched 100 taxa..." in captured.out
         assert "Fetched 200 taxa..." in captured.out
+
+
+def test_sync_database_prints_percentage_progress(test_config, capsys):
+    """Test that sync prints percentage progress when total is known."""
+    # Create mock taxa
+    mock_taxa = [
+        {'id': i, 'name': f'Species {i}', 'rank': 'species', 'ancestors': []}
+        for i in range(1, 251)  # 250 taxa
+    ]
+
+    # Create a mock that yields items and calls the callback
+    def mock_fetch(taxon_id, progress_callback=None):
+        for i, taxon in enumerate(mock_taxa, 1):
+            yield taxon
+            if progress_callback:
+                progress_callback(items_fetched=i)
+
+    # Mock get_taxa to return total_results
+    def mock_get_taxa(**kwargs):
+        if kwargs.get('per_page') == 1:
+            # This is the estimate call
+            return {'total_results': 250, 'results': []}
+        return {'total_results': 0, 'results': []}
+
+    with patch('taxa.sync.fetch_taxon_descendants', side_effect=mock_fetch), \
+         patch('taxa.sync.fetch_observation_summary', return_value=None), \
+         patch('taxa.sync.get_taxa', side_effect=mock_get_taxa):
+
+        sync_database(test_config)
+
+        captured = capsys.readouterr()
+        # Should print estimated total at start
+        assert "Estimated: 250 taxa" in captured.out
+        # Should print percentage progress
+        assert "40.0%)" in captured.out  # 100/250
+        assert "80.0%)" in captured.out  # 200/250

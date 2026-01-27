@@ -10,6 +10,7 @@ from taxa.schema import create_schema
 from taxa.fetcher import fetch_taxon_descendants
 from taxa.transform import flatten_taxon_ancestry
 from taxa.observations import fetch_observation_summary
+from pyinaturalist import get_taxa
 
 
 def sync_database(config: Config, dry_run: bool = False) -> None:
@@ -52,13 +53,25 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
         for taxon_key, taxon_config in config.taxa.items():
             print(f"\nFetching taxon: {taxon_config['name']} (ID: {taxon_config['taxon_id']})")
 
+            # Estimate total taxa to fetch
+            taxon_id = taxon_config['taxon_id']
+            try:
+                response = get_taxa(taxon_id=taxon_id, per_page=1)
+                estimated_total = response.get('total_results', 0)
+                print(f"Estimated: {estimated_total:,} taxa")
+            except Exception:
+                estimated_total = None
+
             # Progress reporting callback
             def progress_callback(items_fetched):
                 if items_fetched % 100 == 0:
-                    print(f"Fetched {items_fetched} taxa...")
+                    if estimated_total:
+                        pct = (items_fetched / estimated_total) * 100
+                        print(f"Fetched {items_fetched} taxa... ({pct:.1f}%)")
+                    else:
+                        print(f"Fetched {items_fetched} taxa...")
 
             # Fetch all descendant taxa
-            taxon_id = taxon_config['taxon_id']
             for taxon in fetch_taxon_descendants(taxon_id, progress_callback=progress_callback):
                 # Flatten and insert taxon
                 row = flatten_taxon_ancestry(taxon)
