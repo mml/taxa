@@ -67,7 +67,7 @@ def with_retry(
             # Calculate delay with exponential backoff
             delay = min(base_delay * (2 ** attempt), max_delay)
 
-            logger.warning(
+            logger.info(
                 f"Attempt {attempt + 1}/{max_attempts} failed: {e}. "
                 f"Retrying in {delay}s..."
             )
