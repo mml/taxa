@@ -5,6 +5,7 @@ from typing import Dict, Any
 import json
 import os
 
+from tqdm import tqdm
 from taxa.config import Config
 from taxa.schema import create_schema
 from taxa.fetcher import fetch_taxon_descendants
@@ -58,21 +59,17 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
             try:
                 response = get_taxa(taxon_id=taxon_id, per_page=1)
                 estimated_total = response.get('total_results', 0)
-                print(f"Estimated: {estimated_total:,} taxa")
             except Exception:
                 estimated_total = None
 
-            # Progress reporting callback
-            def progress_callback(items_fetched):
-                if items_fetched % 100 == 0:
-                    if estimated_total:
-                        pct = (items_fetched / estimated_total) * 100
-                        print(f"Fetched {items_fetched} taxa... ({pct:.1f}%)")
-                    else:
-                        print(f"Fetched {items_fetched} taxa...")
-
-            # Fetch all descendant taxa
-            for taxon in fetch_taxon_descendants(taxon_id, progress_callback=progress_callback):
+            # Fetch all descendant taxa with progress bar
+            for taxon in tqdm(
+                fetch_taxon_descendants(taxon_id),
+                total=estimated_total,
+                desc=f"Fetching {taxon_config['name']}",
+                unit="taxa",
+                disable=None  # Auto-disables if not a TTY
+            ):
                 # Flatten and insert taxon
                 row = flatten_taxon_ancestry(taxon)
 
@@ -132,7 +129,7 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
         )
         conn.commit()
 
-        print("\nSync complete!")
+        print("\n\nSync complete!")
 
     finally:
         conn.close()

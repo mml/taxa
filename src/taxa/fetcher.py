@@ -1,5 +1,5 @@
 """Fetch taxonomic data from iNaturalist API."""
-from typing import Iterator, Dict, Any, Optional, Callable
+from typing import Iterator, Dict, Any, Optional
 from pyinaturalist import get_taxa
 
 from taxa.retry import with_retry
@@ -12,8 +12,7 @@ MAX_RESULTS_PER_SEARCH = 10000
 def fetch_taxon_descendants(
     taxon_id: int,
     per_page: int = 200,
-    max_results: Optional[int] = None,
-    progress_callback: Optional[Callable[..., None]] = None
+    max_results: Optional[int] = None
 ) -> Iterator[Dict[str, Any]]:
     """
     Fetch all descendant taxa for a given taxon ID.
@@ -26,8 +25,6 @@ def fetch_taxon_descendants(
         taxon_id: iNaturalist taxon ID
         per_page: Results per API call (max 200)
         max_results: Maximum total results to fetch (None = all)
-        progress_callback: Optional callback called after each item is yielded,
-                          receives items_fetched as keyword argument
 
     Yields:
         Taxon dictionaries from API
@@ -65,9 +62,6 @@ def fetch_taxon_descendants(
                 yield taxon
                 total_fetched += 1
                 batch_count += 1
-
-                if progress_callback:
-                    progress_callback(items_fetched=total_fetched)
 
                 if max_results and total_fetched >= max_results:
                     return
