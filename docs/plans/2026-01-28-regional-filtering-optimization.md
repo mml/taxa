@@ -273,7 +273,7 @@ At application startup:
 import pyinaturalist
 
 # Set user agent to identify our application
-pyinaturalist.user_agent = "taxa-flora-query-tool/1.0 (contact: YOUR_EMAIL or iNat username)"
+pyinaturalist.user_agent = "taxa-flora-query-tool/1.0 (github.com/mml/taxa)"
 ```
 
 This complies with iNaturalist's recommended practice to identify applications.
@@ -376,7 +376,7 @@ iNaturalist recommends ~1 request/second and ~10k requests/day.
 
 **Implementation:**
 ```python
-pyinaturalist.user_agent = "taxa-flora-query-tool/1.0 (contact: user@example.com)"
+pyinaturalist.user_agent = "taxa-flora-query-tool/1.0 (github.com/mml/taxa)"
 ```
 
 Set at application startup, applies to all requests.
