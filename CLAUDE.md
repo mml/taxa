@@ -31,3 +31,10 @@ Already installed in venv via `pip install -e '.[dev]'`. No need to reinstall un
 ## Git Workflow
 
 We're in a git worktree at `.worktrees/flora-query-tool`. All commits should follow conventional commit format.
+
+## Being a Good Neighbor
+
+iNat has some [recommended practices](https://www.inaturalist.org/pages/api+recommended+practices).
+We should incorporate these into every design decision, and consider them to
+be rules, unless an exception is documented here.  Ipso facto, Rule #1 applies
+to those practices not excepted below.
