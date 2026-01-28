@@ -4,9 +4,13 @@ import subprocess
 import sqlite3
 import sys
 from pathlib import Path
+import pyinaturalist
 from taxa.config import Config, ConfigError
 from taxa.sync import sync_database
 from pyinaturalist import get_places_autocomplete, get_taxa_autocomplete
+
+# Set user agent to comply with iNaturalist API best practices
+pyinaturalist.user_agent = "taxa-flora-query-tool/1.0 (github.com/mml/taxa)"
 
 
 @click.group()
