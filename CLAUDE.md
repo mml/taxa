@@ -30,7 +30,12 @@ Already installed in venv via `pip install -e '.[dev]'`. No need to reinstall un
 
 ## Git Workflow
 
-We're in a git worktree at `.worktrees/flora-query-tool`. All commits should follow conventional commit format.
+We're in a git worktree at `.worktrees/regional-filtering` on branch `feature/regional-filtering`. All commits should follow conventional commit format.
+
+## Current Task
+
+Implementing the regional filtering optimization per the plan at:
+`docs/plans/2026-01-28-regional-filtering-implementation.md`
 
 ## Being a Good Neighbor
 
