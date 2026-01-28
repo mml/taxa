@@ -44,8 +44,8 @@ def db_conn(tmp_path):
 
 def test_sync_database_creates_schema(test_config):
     """Test that sync creates database schema."""
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=None):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[]):
 
         sync_database(test_config)
 
@@ -68,8 +68,8 @@ def test_sync_database_creates_schema(test_config):
 
 def test_sync_database_stores_region_metadata(test_config):
     """Test that sync stores region metadata correctly."""
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=None):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[]):
 
         sync_database(test_config)
 
@@ -90,7 +90,17 @@ def test_sync_database_stores_region_metadata(test_config):
 
 def test_sync_database_stores_taxa(test_config):
     """Test that sync fetches and stores taxa."""
-    mock_taxon = {
+    # Mock the regional discovery returning one taxon
+    mock_regional_taxon = {
+        'id': 47851,
+        'name': 'Plantae',
+        'rank': 'kingdom',
+        'descendant_obs_count': 100,
+        'direct_obs_count': 50
+    }
+
+    # Mock the batch fetch returning full taxon details
+    mock_batch_taxon = {
         'id': 47851,
         'name': 'Plantae',
         'rank': 'kingdom',
@@ -100,8 +110,8 @@ def test_sync_database_stores_taxa(test_config):
         'ancestors': []
     }
 
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[mock_taxon]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=None):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[mock_regional_taxon]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[mock_batch_taxon]):
 
         sync_database(test_config)
 
@@ -123,24 +133,25 @@ def test_sync_database_stores_taxa(test_config):
 
 def test_sync_database_stores_observations(test_config):
     """Test that sync fetches and stores observations."""
-    mock_taxon = {
+    # Mock the regional discovery returning one taxon with observation count
+    mock_regional_taxon = {
+        'id': 47851,
+        'name': 'Plantae',
+        'rank': 'kingdom',
+        'descendant_obs_count': 100,
+        'direct_obs_count': 50
+    }
+
+    # Mock the batch fetch returning full taxon details
+    mock_batch_taxon = {
         'id': 47851,
         'name': 'Plantae',
         'rank': 'kingdom',
         'ancestors': []
     }
 
-    mock_obs = {
-        'taxon_id': 47851,
-        'observation_count': 100,
-        'observer_count': 50,
-        'research_grade_count': 75,
-        'first_observed': '2020-01-01',
-        'last_observed': '2024-12-31'
-    }
-
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[mock_taxon]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=mock_obs):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[mock_regional_taxon]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[mock_batch_taxon]):
 
         sync_database(test_config)
 
@@ -158,16 +169,16 @@ def test_sync_database_stores_observations(test_config):
         assert row[0] == 47851
         assert row[1] == 'test_region'
         assert row[2] == 14
-        assert row[3] == 100
-        assert row[4] == 50
+        assert row[3] == 100  # descendant_obs_count from regional_taxon
+        assert row[4] is None  # observer_count not available in new implementation
 
         conn.close()
 
 
 def test_sync_database_stores_sync_metadata(test_config):
     """Test that sync stores sync metadata."""
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=None):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[]):
 
         sync_database(test_config)
 
@@ -195,8 +206,8 @@ def test_sync_database_atomic_replacement(test_config, tmp_path):
     old_conn.commit()
     old_conn.close()
 
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=None):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[]):
 
         sync_database(test_config)
 
@@ -235,8 +246,8 @@ def test_sync_database_dry_run(test_config, capsys):
 
 def test_sync_database_prints_progress(test_config, capsys):
     """Test that sync prints progress messages."""
-    with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-         patch('taxa.sync.fetch_observation_summary', return_value=None):
+    with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+         patch('taxa.sync.fetch_taxa_batch', return_value=[]):
 
         sync_database(test_config)
 
@@ -245,5 +256,74 @@ def test_sync_database_prints_progress(test_config, capsys):
         assert "test_region" in captured.out
         assert "test_taxon" in captured.out
         assert "Building database:" in captured.out
-        assert "Fetching taxon: Test Taxon (ID: 47851)" in captured.out
+        assert "Syncing taxon: Test Taxon (ID: 47851)" in captured.out
         assert "Sync complete!" in captured.out
+
+
+def test_sync_database_regional_filtering(tmp_path):
+    """Test sync uses regional filtering instead of global fetch."""
+    config = Config({
+        'database': str(tmp_path / "test.db"),
+        'regions': {
+            'test_region': {
+                'name': 'Test Region',
+                'place_ids': [123]
+            }
+        },
+        'taxa': {
+            'test_taxon': {
+                'name': 'Test Taxon',
+                'taxon_id': 456
+            }
+        },
+        'filters': {}
+    })
+
+    with patch('taxa.sync.fetch_regional_taxa') as mock_regional, \
+         patch('taxa.sync.fetch_taxa_batch') as mock_batch:
+
+        # Mock regional discovery returns 3 taxa
+        mock_regional.return_value = [
+            {'id': 1, 'descendant_obs_count': 10, 'direct_obs_count': 5},
+            {'id': 2, 'descendant_obs_count': 20, 'direct_obs_count': 10},
+            {'id': 3, 'descendant_obs_count': 15, 'direct_obs_count': 15}
+        ]
+
+        # Mock batch fetch returns full details
+        mock_batch.return_value = [
+            {
+                'id': 1,
+                'name': 'Taxon 1',
+                'rank': 'species',
+                'ancestors': []
+            },
+            {
+                'id': 2,
+                'name': 'Taxon 2',
+                'rank': 'species',
+                'ancestors': []
+            },
+            {
+                'id': 3,
+                'name': 'Taxon 3',
+                'rank': 'species',
+                'ancestors': []
+            }
+        ]
+
+        sync_database(config)
+
+        # Should have called regional fetch once per region
+        assert mock_regional.call_count == 1
+
+        # Should have called batch fetch once with all 3 IDs
+        assert mock_batch.call_count == 1
+        batch_ids = mock_batch.call_args[0][0]
+        assert set(batch_ids) == {1, 2, 3}
+
+        # Verify database has the taxa
+        conn = sqlite3.connect(config.database)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM taxa")
+        assert cursor.fetchone()[0] == 3
+        conn.close()

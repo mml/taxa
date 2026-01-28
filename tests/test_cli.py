@@ -31,8 +31,8 @@ def test_sync_command():
             yaml.dump(config, f)
 
         # Mock API calls
-        with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-             patch('taxa.sync.fetch_observation_summary', return_value=None):
+        with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+             patch('taxa.sync.fetch_taxa_batch', return_value=[]):
             result = runner.invoke(main, ['sync'])
 
         assert result.exit_code == 0
@@ -54,8 +54,8 @@ def test_sync_command_custom_config():
             yaml.dump(config, f)
 
         # Mock API calls
-        with patch('taxa.sync.fetch_taxon_descendants', return_value=[]), \
-             patch('taxa.sync.fetch_observation_summary', return_value=None):
+        with patch('taxa.sync.fetch_regional_taxa', return_value=[]), \
+             patch('taxa.sync.fetch_taxa_batch', return_value=[]):
             result = runner.invoke(main, ['sync', 'custom.yaml'])
 
         assert result.exit_code == 0
@@ -255,7 +255,7 @@ def test_sync_command_keyboard_interrupt():
             yaml.dump(config, f)
 
         # Raise KeyboardInterrupt during fetch
-        with patch('taxa.sync.fetch_taxon_descendants', side_effect=KeyboardInterrupt):
+        with patch('taxa.sync.fetch_regional_taxa', side_effect=KeyboardInterrupt):
             result = runner.invoke(main, ['sync'])
 
         assert result.exit_code == 1
