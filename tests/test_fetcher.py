@@ -1,4 +1,4 @@
-from taxa.fetcher import fetch_taxon_descendants
+from taxa.fetcher import fetch_taxon_descendants, fetch_regional_taxa
 from unittest.mock import Mock, patch
 
 
@@ -111,3 +111,77 @@ def test_fetch_taxon_descendants_retries_on_network_error():
 
         assert len(results) == 1
         assert mock_get_taxa.call_count == 2  # Failed once, succeeded once
+
+
+def test_fetch_regional_taxa_single_page():
+    """Test fetching regional taxa with results in one page."""
+    with patch('taxa.fetcher.with_retry') as mock_retry:
+        # Mock response with < 200 results
+        mock_retry.return_value = {
+            'results': [
+                {
+                    'id': 123,
+                    'name': 'Malus domestica',
+                    'rank': 'species',
+                    'descendant_obs_count': 50,
+                    'direct_obs_count': 50
+                },
+                {
+                    'id': 456,
+                    'name': 'Prunus avium',
+                    'rank': 'species',
+                    'descendant_obs_count': 30,
+                    'direct_obs_count': 30
+                }
+            ]
+        }
+
+        result = fetch_regional_taxa(
+            taxon_id=922110,
+            place_id=2764,
+            quality_grade='research'
+        )
+
+        # Should return all taxa
+        assert len(result) == 2
+        assert result[0]['id'] == 123
+        assert result[1]['id'] == 456
+
+        # Should have called API once
+        assert mock_retry.call_count == 1
+
+
+def test_fetch_regional_taxa_pagination():
+    """Test pagination when results span multiple pages."""
+    with patch('taxa.fetcher.with_retry') as mock_retry:
+        # Mock two pages of results (full page size = 200)
+        mock_retry.side_effect = [
+            {
+                'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(200)]
+            },
+            {
+                'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(200, 250)]
+            }
+        ]
+
+        result = fetch_regional_taxa(taxon_id=922110, place_id=2764)
+
+        # Should return all taxa from both pages
+        assert len(result) == 250
+
+        # Should have called API 2 times (second page has < 200 results, so we stop)
+        assert mock_retry.call_count == 2
+
+
+def test_fetch_regional_taxa_empty():
+    """Test handling when no taxa have observations in region."""
+    with patch('taxa.fetcher.with_retry') as mock_retry:
+        mock_retry.return_value = {'results': []}
+
+        result = fetch_regional_taxa(taxon_id=999999, place_id=2764)
+
+        # Should return empty list
+        assert result == []
+
+        # Should have called API once
+        assert mock_retry.call_count == 1
