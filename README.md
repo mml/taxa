@@ -60,6 +60,20 @@ taxa sync config.yaml
 
 This fetches taxonomic hierarchy and observation data from iNaturalist and builds a SQLite database.
 
+## Performance
+
+The tool uses regional filtering to optimize sync performance:
+
+- **Old approach:** Fetch all global taxa, then query observations for each (~10,000 API calls)
+- **New approach:** Discover regional taxa first, then batch fetch details (~7-12 API calls)
+
+**Typical sync times:**
+- Small genus (e.g., Malus) in one county: ~1 minute
+- Large subfamily (e.g., Amygdaloideae) in one county: ~2-3 minutes
+- Multiple taxa across multiple regions: ~5-10 minutes
+
+The tool complies with iNaturalist's recommended API practices (~1 req/sec, ~10k req/day).
+
 ### 4. Query the data
 
 ```bash
