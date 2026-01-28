@@ -115,6 +115,15 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
 
                 taxa = fetch_taxa_batch(taxon_ids, batch_size=30, callback=update_progress)
 
+                # Track which taxa were successfully fetched
+                fetched_ids = {taxon['id'] for taxon in taxa}
+                missing_ids = set(taxon_ids) - fetched_ids
+
+                if missing_ids:
+                    print(f"\nWARNING: Failed to fetch {len(missing_ids)} taxa: {sorted(list(missing_ids)[:10])}")
+                    if len(missing_ids) > 10:
+                        print(f"  ... and {len(missing_ids) - 10} more")
+
                 for taxon in taxa:
                     taxon_id = taxon['id']
 

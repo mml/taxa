@@ -260,6 +260,49 @@ def test_sync_database_prints_progress(test_config, capsys):
         assert "Sync complete!" in captured.out
 
 
+def test_sync_database_warns_on_missing_taxa(tmp_path, capsys):
+    """Test that sync warns when some taxa can't be fetched."""
+    config = Config({
+        'database': str(tmp_path / "test.db"),
+        'regions': {
+            'test': {
+                'name': 'Test',
+                'place_ids': [123]
+            }
+        },
+        'taxa': {
+            'test': {
+                'name': 'Test',
+                'taxon_id': 456
+            }
+        },
+        'filters': {}
+    })
+
+    with patch('taxa.sync.fetch_regional_taxa') as mock_regional, \
+         patch('taxa.sync.fetch_taxa_batch') as mock_batch:
+
+        # Regional discovery returns 3 taxa
+        mock_regional.return_value = [
+            {'id': 1, 'descendant_obs_count': 10, 'direct_obs_count': 5},
+            {'id': 2, 'descendant_obs_count': 20, 'direct_obs_count': 10},
+            {'id': 3, 'descendant_obs_count': 15, 'direct_obs_count': 15}
+        ]
+
+        # Batch fetch only returns 2 taxa (taxon 2 is missing)
+        mock_batch.return_value = [
+            {'id': 1, 'name': 'Taxon 1', 'rank': 'species', 'ancestors': []},
+            {'id': 3, 'name': 'Taxon 3', 'rank': 'species', 'ancestors': []}
+        ]
+
+        sync_database(config)
+
+        # Check that warning was printed
+        captured = capsys.readouterr()
+        assert 'WARNING: Failed to fetch 1 taxa' in captured.out
+        assert '[2]' in captured.out
+
+
 def test_sync_database_regional_filtering(tmp_path):
     """Test sync uses regional filtering instead of global fetch."""
     config = Config({
