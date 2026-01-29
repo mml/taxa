@@ -1,6 +1,6 @@
 """Breakdown query generation for hierarchical taxonomic queries."""
 import sqlite3
-from taxa.taxonomy import TAXONOMIC_RANKS, sort_ranks
+from taxa.taxonomy import TAXONOMIC_RANKS, sort_ranks, get_next_ranks
 
 
 def find_taxon_rank(db, taxon_name):
@@ -45,6 +45,47 @@ def find_taxon_rank(db, taxon_name):
         )
 
     return found_ranks[0]
+
+
+def find_first_populated_rank(conn, base_taxon, base_rank):
+    """Find the first populated rank below base_rank for the given taxon.
+
+    Checks each rank in hierarchical order to find the first one with
+    non-NULL values among descendants of base_taxon.
+
+    Args:
+        conn: SQLite database connection
+        base_taxon: Name of base taxon (e.g., "Rosaceae")
+        base_rank: Rank of base taxon (e.g., "family")
+
+    Returns:
+        Tuple of (populated_rank, expected_rank) where:
+        - populated_rank: First rank below base_rank with non-NULL data
+        - expected_rank: The immediate next rank after base_rank
+
+    Raises:
+        ValueError: If no populated ranks found below base_rank
+    """
+    cursor = conn.cursor()
+
+    # Get all ranks below base_rank
+    remaining_ranks = get_next_ranks(base_rank, count=100)
+
+    if not remaining_ranks:
+        raise ValueError(f"No levels below '{base_rank}' in taxonomy")
+
+    expected_rank = remaining_ranks[0]
+
+    # Check each rank for non-NULL values
+    for candidate_rank in remaining_ranks:
+        result = cursor.execute(
+            f"SELECT 1 FROM taxa WHERE {base_rank} = ? AND {candidate_rank} IS NOT NULL LIMIT 1",
+            (base_taxon,)
+        )
+        if result.fetchone():
+            return (candidate_rank, expected_rank)
+
+    raise ValueError(f"No populated levels below '{base_rank}' in taxonomy")
 
 
 def generate_breakdown_query(base_taxon, base_rank, levels, region_key=None):

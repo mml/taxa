@@ -1,7 +1,7 @@
 """Tests for breakdown query generation."""
 import sqlite3
 import pytest
-from taxa.breakdown import find_taxon_rank
+from taxa.breakdown import find_taxon_rank, generate_breakdown_query, find_first_populated_rank
 
 
 @pytest.fixture
@@ -146,3 +146,76 @@ def test_generate_breakdown_query_skip_levels():
     # Should work without intermediate levels
     assert 'GROUP BY genus' in query
     assert params == ['Asteraceae']
+
+
+def test_find_first_populated_rank_next_rank_populated(sample_db):
+    """When next rank has data, return it without skipping."""
+    conn = sample_db
+
+    # Rosaceae family has subfamilies populated
+    populated, expected = find_first_populated_rank(conn, "Rosaceae", "family")
+
+    assert populated == "subfamily"
+    assert expected == "subfamily"
+
+
+def test_find_first_populated_rank_skip_one_rank(sample_db):
+    """When next rank is NULL, skip to the first populated rank."""
+    conn = sample_db
+
+    # Dryadoideae subfamily has NULL tribe, but populated genus
+    populated, expected = find_first_populated_rank(conn, "Dryadoideae", "subfamily")
+
+    assert populated == "genus"
+    assert expected == "tribe"
+
+
+def test_find_first_populated_rank_skip_multiple_ranks(sample_db):
+    """When multiple ranks are NULL, skip to the first populated rank."""
+    conn = sample_db
+    cursor = conn.cursor()
+
+    # Create a taxon with NULL tribe and subtribe, but populated genus
+    cursor.execute("""
+        INSERT INTO taxa (id, scientific_name, rank, family, subfamily, tribe, subtribe, genus)
+        VALUES (999, 'Test genus', 'genus', 'Rosaceae', 'Testinae', NULL, NULL, 'Testus')
+    """)
+    cursor.execute("""
+        INSERT INTO observations (taxon_id, region_key, place_id, observation_count)
+        VALUES (999, 'test_region', 1, 50)
+    """)
+    conn.commit()
+
+    populated, expected = find_first_populated_rank(conn, "Testinae", "subfamily")
+
+    assert populated == "genus"
+    assert expected == "tribe"
+
+
+def test_find_first_populated_rank_no_populated_ranks(sample_db):
+    """When no ranks below base are populated, raise ValueError."""
+    conn = sample_db
+    cursor = conn.cursor()
+
+    # Create a species with no lower ranks populated
+    cursor.execute("""
+        INSERT INTO taxa (id, scientific_name, rank, family, genus, species, subspecies, variety)
+        VALUES (998, 'Test species', 'species', 'Rosaceae', 'Testus', 'testus', NULL, NULL)
+    """)
+    cursor.execute("""
+        INSERT INTO observations (taxon_id, region_key, place_id, observation_count)
+        VALUES (998, 'test_region', 1, 30)
+    """)
+    conn.commit()
+
+    with pytest.raises(ValueError, match="No populated levels below 'species' in taxonomy"):
+        find_first_populated_rank(conn, "testus", "species")
+
+
+def test_find_first_populated_rank_at_lowest_rank(sample_db):
+    """When already at lowest rank, raise ValueError."""
+    conn = sample_db
+
+    # 'form' is the lowest rank
+    with pytest.raises(ValueError, match="No levels below 'form' in taxonomy"):
+        find_first_populated_rank(conn, "some_form", "form")
