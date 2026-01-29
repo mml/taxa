@@ -85,3 +85,64 @@ def test_generate_breakdown_query_single_level():
 
     # Params should have base taxon
     assert params == ['Asteraceae']
+
+
+def test_generate_breakdown_query_multiple_levels():
+    """Test generating query with multiple hierarchical levels."""
+    from taxa.breakdown import generate_breakdown_query
+
+    query, params = generate_breakdown_query(
+        base_taxon='Asteraceae',
+        base_rank='family',
+        levels=['subfamily', 'tribe']
+    )
+
+    # Should have UNION ALL for multiple queries
+    assert 'UNION ALL' in query
+
+    # Should have 2 SELECTs (one for subfamily, one for subfamily+tribe)
+    assert query.count('SELECT') == 2
+
+    # First query groups by subfamily only
+    # Second query groups by subfamily and tribe
+    assert 'GROUP BY subfamily' in query
+    assert 'GROUP BY subfamily, tribe' in query
+
+    # Should have NULL as tribe in first query
+    assert 'NULL as tribe' in query
+
+    # Params should have base taxon twice (once per query)
+    assert params == ['Asteraceae', 'Asteraceae']
+
+
+def test_generate_breakdown_query_with_region():
+    """Test generating query with region filter."""
+    from taxa.breakdown import generate_breakdown_query
+
+    query, params = generate_breakdown_query(
+        base_taxon='Asteraceae',
+        base_rank='family',
+        levels=['subfamily'],
+        region_key='north_coast'
+    )
+
+    # Should filter by region
+    assert 'observations.region_key = ?' in query
+
+    # Params should have both taxon and region
+    assert params == ['Asteraceae', 'north_coast']
+
+
+def test_generate_breakdown_query_skip_levels():
+    """Test generating query that skips intermediate levels."""
+    from taxa.breakdown import generate_breakdown_query
+
+    query, params = generate_breakdown_query(
+        base_taxon='Asteraceae',
+        base_rank='family',
+        levels=['genus']  # Skip subfamily, tribe, subtribe
+    )
+
+    # Should work without intermediate levels
+    assert 'GROUP BY genus' in query
+    assert params == ['Asteraceae']
