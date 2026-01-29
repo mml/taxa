@@ -1,6 +1,6 @@
 """Breakdown query generation for hierarchical taxonomic queries."""
 import sqlite3
-from taxa.taxonomy import TAXONOMIC_RANKS
+from taxa.taxonomy import TAXONOMIC_RANKS, sort_ranks
 
 
 def find_taxon_rank(db, taxon_name):
@@ -45,3 +45,76 @@ def find_taxon_rank(db, taxon_name):
         )
 
     return found_ranks[0]
+
+
+def generate_breakdown_query(base_taxon, base_rank, levels, region_key=None):
+    """Generate UNION query for hierarchical breakdown.
+
+    Args:
+        base_taxon: Name of taxon to break down (e.g., "Asteraceae")
+        base_rank: Rank of base taxon (e.g., "family")
+        levels: List of ranks to break down to (e.g., ["subfamily", "tribe"])
+        region_key: Optional region filter
+
+    Returns:
+        Tuple of (query_string, params_list)
+    """
+    # Sort levels to ensure hierarchical order
+    levels = sort_ranks(levels)
+
+    queries = []
+
+    # For each level, create a SELECT with all previous levels + current level
+    for i, level in enumerate(levels):
+        # Columns: all levels up to current (rest are NULL)
+        select_cols = []
+        group_cols = []
+
+        for j, l in enumerate(levels):
+            if j <= i:
+                select_cols.append(l)
+                group_cols.append(l)
+            else:
+                select_cols.append(f"NULL as {l}")
+
+        # Add aggregation columns
+        select_cols.extend([
+            "SUM(observations.observation_count) as observation_count",
+            "COUNT(DISTINCT CASE WHEN taxa.rank = 'species' THEN taxa.id END) as species_count"
+        ])
+
+        # Build WHERE clause
+        where_parts = [f"{base_rank} = ?"]
+        params = [base_taxon]
+
+        # Add NOT NULL checks for all levels we're grouping by
+        for col in group_cols:
+            where_parts.append(f"{col} IS NOT NULL")
+
+        # Add region filter if specified
+        if region_key:
+            where_parts.append("observations.region_key = ?")
+            params.append(region_key)
+
+        query = f"""
+        SELECT {', '.join(select_cols)}
+        FROM taxa
+        JOIN observations ON observations.taxon_id = taxa.id
+        WHERE {' AND '.join(where_parts)}
+        GROUP BY {', '.join(group_cols)}
+        """
+
+        queries.append((query, params))
+
+    # Combine with UNION ALL
+    full_query = " UNION ALL ".join(q for q, _ in queries)
+
+    # Add ORDER BY (NULLs first for subtotals, then by observation count)
+    order_cols = [f"{level} NULLS FIRST" for level in levels]
+    order_cols.append("observation_count DESC")
+    full_query += f" ORDER BY {', '.join(order_cols)}"
+
+    # Flatten params
+    all_params = [p for _, params in queries for p in params]
+
+    return full_query, all_params

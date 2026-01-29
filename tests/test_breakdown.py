@@ -54,3 +54,34 @@ def test_find_taxon_rank_not_found(test_db):
     """Test error when taxon not found."""
     with pytest.raises(ValueError, match="not found"):
         find_taxon_rank(test_db, 'NotARealTaxon')
+
+
+def test_generate_breakdown_query_single_level():
+    """Test generating query for single level breakdown."""
+    from taxa.breakdown import generate_breakdown_query
+
+    query, params = generate_breakdown_query(
+        base_taxon='Asteraceae',
+        base_rank='family',
+        levels=['subfamily']
+    )
+
+    # Should have single SELECT (no UNION)
+    assert 'UNION' not in query
+
+    # Should group by subfamily
+    assert 'GROUP BY subfamily' in query
+
+    # Should filter by family
+    assert 'family = ?' in query
+
+    # Should aggregate observation and species counts
+    assert 'SUM(observations.observation_count)' in query
+    assert 'COUNT(DISTINCT' in query
+    assert 'species' in query.lower()
+
+    # Should order by subfamily, then observation count
+    assert 'ORDER BY' in query
+
+    # Params should have base taxon
+    assert params == ['Asteraceae']
