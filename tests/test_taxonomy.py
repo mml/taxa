@@ -1,5 +1,5 @@
 """Tests for taxonomy constants and utilities."""
-from taxa.taxonomy import TAXONOMIC_RANKS
+from taxa.taxonomy import TAXONOMIC_RANKS, get_next_ranks
 
 
 def test_taxonomic_ranks_exists():
@@ -16,3 +16,25 @@ def test_taxonomic_ranks_order():
         'section', 'subsection', 'species', 'subspecies', 'variety', 'form'
     ]
     assert TAXONOMIC_RANKS == expected_order
+
+
+def test_get_next_ranks_single():
+    """Test getting next single rank in hierarchy."""
+    assert get_next_ranks('family') == ['subfamily']
+    assert get_next_ranks('subfamily') == ['tribe']
+    assert get_next_ranks('genus') == ['subgenus']
+
+
+def test_get_next_ranks_multiple():
+    """Test getting multiple next ranks."""
+    assert get_next_ranks('family', count=2) == ['subfamily', 'tribe']
+    assert get_next_ranks('family', count=3) == ['subfamily', 'tribe', 'subtribe']
+
+
+def test_get_next_ranks_at_end():
+    """Test getting next ranks when near end of hierarchy."""
+    # 'form' is last rank, should return empty list
+    assert get_next_ranks('form', count=1) == []
+
+    # 'variety' has only 1 rank after it
+    assert get_next_ranks('variety', count=2) == ['form']
