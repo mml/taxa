@@ -148,9 +148,9 @@ def test_generate_breakdown_query_skip_levels():
     assert params == ['Asteraceae']
 
 
-def test_find_first_populated_rank_next_rank_populated(sample_db):
+def test_find_first_populated_rank_next_rank_populated(memory_sample_db):
     """When next rank has data, return it without skipping."""
-    conn = sample_db
+    conn = memory_sample_db
 
     # Rosaceae family has subfamilies populated
     populated, expected = find_first_populated_rank(conn, "Rosaceae", "family")
@@ -159,9 +159,9 @@ def test_find_first_populated_rank_next_rank_populated(sample_db):
     assert expected == "subfamily"
 
 
-def test_find_first_populated_rank_skip_one_rank(sample_db):
+def test_find_first_populated_rank_skip_one_rank(memory_sample_db):
     """When next rank is NULL, skip to the first populated rank."""
-    conn = sample_db
+    conn = memory_sample_db
 
     # Dryadoideae subfamily has NULL tribe, but populated genus
     populated, expected = find_first_populated_rank(conn, "Dryadoideae", "subfamily")
@@ -170,9 +170,9 @@ def test_find_first_populated_rank_skip_one_rank(sample_db):
     assert expected == "tribe"
 
 
-def test_find_first_populated_rank_skip_multiple_ranks(sample_db):
+def test_find_first_populated_rank_skip_multiple_ranks(memory_sample_db):
     """When multiple ranks are NULL, skip to the first populated rank."""
-    conn = sample_db
+    conn = memory_sample_db
     cursor = conn.cursor()
 
     # Create a taxon with NULL tribe and subtribe, but populated genus
@@ -192,9 +192,9 @@ def test_find_first_populated_rank_skip_multiple_ranks(sample_db):
     assert expected == "tribe"
 
 
-def test_find_first_populated_rank_no_populated_ranks(sample_db):
+def test_find_first_populated_rank_no_populated_ranks(memory_sample_db):
     """When no ranks below base are populated, raise ValueError."""
-    conn = sample_db
+    conn = memory_sample_db
     cursor = conn.cursor()
 
     # Create a species with no lower ranks populated
@@ -212,9 +212,9 @@ def test_find_first_populated_rank_no_populated_ranks(sample_db):
         find_first_populated_rank(conn, "testus", "species")
 
 
-def test_find_first_populated_rank_at_lowest_rank(sample_db):
+def test_find_first_populated_rank_at_lowest_rank(memory_sample_db):
     """When already at lowest rank, raise ValueError."""
-    conn = sample_db
+    conn = memory_sample_db
 
     # 'form' is the lowest rank
     with pytest.raises(ValueError, match="No levels below 'form' in taxonomy"):
