@@ -1,5 +1,5 @@
 """Tests for taxonomy constants and utilities."""
-from taxa.taxonomy import TAXONOMIC_RANKS, get_next_ranks
+from taxa.taxonomy import TAXONOMIC_RANKS, get_next_ranks, sort_ranks
 
 
 def test_taxonomic_ranks_exists():
@@ -38,3 +38,26 @@ def test_get_next_ranks_at_end():
 
     # 'variety' has only 1 rank after it
     assert get_next_ranks('variety', count=2) == ['form']
+
+
+def test_sort_ranks_already_sorted():
+    """Test sorting ranks that are already in order."""
+    ranks = ['family', 'subfamily', 'tribe', 'genus']
+    assert sort_ranks(ranks) == ['family', 'subfamily', 'tribe', 'genus']
+
+
+def test_sort_ranks_reverse_order():
+    """Test sorting ranks in reverse order."""
+    ranks = ['genus', 'tribe', 'subfamily']
+    assert sort_ranks(ranks) == ['subfamily', 'tribe', 'genus']
+
+
+def test_sort_ranks_mixed_order():
+    """Test sorting ranks in random order."""
+    ranks = ['genus', 'family', 'species', 'tribe']
+    assert sort_ranks(ranks) == ['family', 'tribe', 'genus', 'species']
+
+
+def test_sort_ranks_single():
+    """Test sorting single rank."""
+    assert sort_ranks(['genus']) == ['genus']

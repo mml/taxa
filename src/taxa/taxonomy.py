@@ -39,3 +39,22 @@ def get_next_ranks(current_rank, count=1):
 
     idx = TAXONOMIC_RANKS.index(current_rank)
     return TAXONOMIC_RANKS[idx+1:idx+1+count]
+
+
+def sort_ranks(ranks):
+    """Sort ranks by hierarchical order.
+
+    Args:
+        ranks: List of rank names to sort
+
+    Returns:
+        List of ranks sorted from highest to lowest in hierarchy
+
+    Raises:
+        ValueError: If any rank is not in TAXONOMIC_RANKS
+    """
+    for rank in ranks:
+        if rank not in TAXONOMIC_RANKS:
+            raise ValueError(f"Unknown rank: {rank}")
+
+    return sorted(ranks, key=lambda r: TAXONOMIC_RANKS.index(r))
