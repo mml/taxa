@@ -153,10 +153,43 @@ The script estimates how long a full sync would take.
 taxa sync [config.yaml]           # Sync data from iNaturalist
 taxa query "SELECT ..."           # Run SQL query
 taxa query                        # Interactive SQL shell
+taxa breakdown TAXON [OPTIONS]    # Hierarchical taxonomic breakdown
 taxa search places QUERY          # Find place IDs
 taxa search taxa QUERY            # Find taxon IDs
 taxa info                         # Show database stats
 ```
+
+## Breakdown Command
+
+Break down a taxon into its constituent hierarchical levels with observation and species counts.
+
+```bash
+# Show next level (subfamily) for Asteraceae
+taxa breakdown Asteraceae
+
+# Show multiple levels
+taxa breakdown Asteraceae --levels subfamily,tribe
+
+# Skip intermediate levels
+taxa breakdown Asteraceae --levels genus
+
+# Filter by region
+taxa breakdown Rosaceae --region north_coast --levels genus
+
+# Specify database
+taxa breakdown "Amygdaloideae" --database flora.db
+```
+
+**Output format:**
+
+```
+subfamily       tribe           observation_count       species_count
+Asteroideae     NULL            45234                   892
+Asteroideae     Anthemideae     12456                   234
+Asteroideae     Astereae        8901                    156
+```
+
+Rows with NULL in lower-level columns are subtotals for the parent level.
 
 ## Development
 
