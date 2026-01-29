@@ -73,11 +73,18 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
                             f"{taxon_config['name'][:20]} in {region['name'][:20]}"
                         )
 
+                        # Callback to update progress during pagination
+                        def update_pagination_progress(page: int, fetched: int) -> None:
+                            pbar.set_postfix_str(
+                                f"{taxon_config['name'][:20]} in {region['name'][:20]} (page {page}, {fetched} taxa)"
+                            )
+
                         # Fetch all taxa with observations in this place
                         taxa = fetch_regional_taxa(
                             taxon_id=taxon_config['taxon_id'],
                             place_id=place_id,
-                            quality_grade=config.filters.get('quality_grade')
+                            quality_grade=config.filters.get('quality_grade'),
+                            progress_callback=update_pagination_progress
                         )
 
                         # Store observation data by taxon/region/place
@@ -146,11 +153,14 @@ def sync_database(config: Config, dry_run: bool = False) -> None:
                     """, row)
 
                     # Insert all ancestors (for complete hierarchy)
+                    # Use INSERT OR IGNORE to avoid overwriting taxa that were batch-fetched
+                    # with full details. Ancestor objects lack their own 'ancestors' arrays,
+                    # so re-inserting them would overwrite parent rank data with NULLs.
                     ancestors = taxon.get('ancestors', [])
                     for ancestor in ancestors:
                         ancestor_row = flatten_taxon_ancestry(ancestor)
                         cursor.execute("""
-                            INSERT OR REPLACE INTO taxa (
+                            INSERT OR IGNORE INTO taxa (
                                 id, scientific_name, common_name, rank,
                                 kingdom, phylum, class, order_name, family,
                                 subfamily, tribe, subtribe, genus, subgenus,
