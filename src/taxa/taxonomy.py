@@ -58,3 +58,34 @@ def sort_ranks(ranks):
             raise ValueError(f"Unknown rank: {rank}")
 
     return sorted(ranks, key=lambda r: TAXONOMIC_RANKS.index(r))
+
+
+def validate_rank_sequence(base_rank, requested_ranks):
+    """Validate that requested ranks are all below base_rank in hierarchy.
+
+    Args:
+        base_rank: Starting rank
+        requested_ranks: List of ranks to validate
+
+    Returns:
+        True if all ranks are valid
+
+    Raises:
+        ValueError: If any requested rank is not below base_rank
+    """
+    if base_rank not in TAXONOMIC_RANKS:
+        raise ValueError(f"Unknown rank: {base_rank}")
+
+    base_idx = TAXONOMIC_RANKS.index(base_rank)
+
+    for rank in requested_ranks:
+        if rank not in TAXONOMIC_RANKS:
+            raise ValueError(f"Unknown rank: {rank}")
+
+        rank_idx = TAXONOMIC_RANKS.index(rank)
+        if rank_idx <= base_idx:
+            raise ValueError(
+                f"Cannot break down to '{rank}' - it's not below '{base_rank}'"
+            )
+
+    return True

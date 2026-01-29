@@ -61,3 +61,43 @@ def test_sort_ranks_mixed_order():
 def test_sort_ranks_single():
     """Test sorting single rank."""
     assert sort_ranks(['genus']) == ['genus']
+
+
+def test_validate_rank_sequence_valid():
+    """Test validating correct rank sequences."""
+    from taxa.taxonomy import validate_rank_sequence
+
+    # Valid sequences should not raise
+    validate_rank_sequence('family', ['subfamily', 'tribe'])
+    validate_rank_sequence('family', ['genus'])
+    validate_rank_sequence('genus', ['species', 'subspecies'])
+
+
+def test_validate_rank_sequence_invalid_higher():
+    """Test that higher ranks are rejected."""
+    import pytest
+    from taxa.taxonomy import validate_rank_sequence
+
+    with pytest.raises(ValueError, match="not below"):
+        validate_rank_sequence('family', ['kingdom'])
+
+    with pytest.raises(ValueError, match="not below"):
+        validate_rank_sequence('genus', ['family'])
+
+
+def test_validate_rank_sequence_invalid_same():
+    """Test that same rank is rejected."""
+    import pytest
+    from taxa.taxonomy import validate_rank_sequence
+
+    with pytest.raises(ValueError, match="not below"):
+        validate_rank_sequence('family', ['family'])
+
+
+def test_validate_rank_sequence_mixed_valid_invalid():
+    """Test mixed valid and invalid ranks."""
+    import pytest
+    from taxa.taxonomy import validate_rank_sequence
+
+    with pytest.raises(ValueError, match="not below"):
+        validate_rank_sequence('family', ['subfamily', 'kingdom'])
