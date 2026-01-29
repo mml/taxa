@@ -9,6 +9,7 @@ from taxa.config import Config, ConfigError
 from taxa.sync import sync_database
 from taxa.breakdown import find_taxon_rank, generate_breakdown_query
 from taxa.taxonomy import get_next_ranks, validate_rank_sequence
+from taxa.completion import generate_completion_cache, write_completion_cache, get_cache_path
 from pyinaturalist import get_places_autocomplete, get_taxa_autocomplete
 
 # Set user agent to comply with iNaturalist API best practices
@@ -229,6 +230,73 @@ def breakdown(taxon_name, levels, region, database):
         sys.exit(1)
     finally:
         conn.close()
+
+
+@main.group()
+def completion():
+    """Manage shell completions."""
+    pass
+
+
+@completion.command('generate-cache')
+@click.option('--database', '-d', default='flora.db', help='Database file path')
+def generate_cache(database):
+    """Generate completion cache from database."""
+    try:
+        db_path = Path(database)
+        cache_data = generate_completion_cache(db_path)
+        cache_path = get_cache_path(database)
+        write_completion_cache(cache_data, cache_path)
+
+        click.echo(f"Generated completion cache: {cache_path}")
+        click.echo(f"  Taxa: {cache_data['metadata']['taxa_count']}")
+        click.echo(f"  Regions: {cache_data['metadata']['region_count']}")
+    except FileNotFoundError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"ERROR: Failed to generate cache: {e}", err=True)
+        sys.exit(1)
+
+
+@completion.command()
+@click.option('--shell', type=click.Choice(['zsh']), default='zsh', help='Shell type')
+def install(shell):
+    """Install shell completion for taxa."""
+    try:
+        config_dir = Path.home() / '.config' / 'taxa' / 'completions'
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        completion_script = config_dir / '_taxa'
+
+        # Read template from package
+        template_path = Path(__file__).parent / 'completion_template.zsh'
+        completion_content = template_path.read_text()
+
+        # Write completion script
+        completion_script.write_text(completion_content)
+
+        click.echo(f"Installed completion script: {completion_script}")
+
+        # Generate initial cache if database exists
+        default_db = Path('flora.db')
+        if default_db.exists():
+            try:
+                cache_data = generate_completion_cache(default_db)
+                cache_path = get_cache_path('flora.db')
+                write_completion_cache(cache_data, cache_path)
+                click.echo(f"Generated initial cache: {cache_path}")
+            except Exception as e:
+                click.echo(f"Warning: Could not generate cache: {e}", err=True)
+
+        click.echo("\nTo enable completions, add to your ~/.zshrc:")
+        click.echo("  fpath=(~/.config/taxa/completions $fpath)")
+        click.echo("  autoload -Uz compinit && compinit")
+        click.echo("\nThen reload your shell:")
+        click.echo("  exec zsh")
+    except Exception as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
