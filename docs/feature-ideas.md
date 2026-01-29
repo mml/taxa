@@ -82,3 +82,104 @@ taxa breakdown Dryadoideae
 # Automatically detect that genus is the first populated child rank
 # and use that as the default
 ```
+
+## Percentage Breakdown
+
+Show what percentage of observations each child taxon represents relative to the parent taxon.
+
+### Proposed Behavior
+
+Add a percentage column to breakdown output showing each row's proportion of total observations:
+
+```bash
+taxa breakdown Rosaceae
+subfamily        observation_count  species_count  pct_of_parent
+Amygdaloideae    14534             39             28.3%
+Dryadoideae      593               1              1.2%
+Rosoideae        28348             31             55.2%
+NULL             8436              0              16.4%
+```
+
+### Implementation Considerations
+
+- Calculate percentage as `(row_observations / sum_all_observations) * 100`
+- Round to 1 decimal place for readability
+- For multi-level breakdowns, percentage should be relative to the immediate parent group
+- Handle division by zero if total observations is 0
+- Consider whether this should be always-on or opt-in via `--show-percent` flag
+
+### Use Cases
+
+- Quickly identify dominant taxa in a group
+- Understand relative importance of different subfamilies/tribes/genera
+- Spot rare vs common taxa at a glance
+
+## Filter by Minimum Observation Count
+
+Add a `--min-observations` flag to filter out taxa with few observations, reducing noise in large breakdowns.
+
+### Proposed Behavior
+
+```bash
+taxa breakdown Rosaceae --min-observations 1000
+subfamily        observation_count  species_count
+Amygdaloideae    14534             39
+Rosoideae        28348             31
+NULL             8436              0
+# Dryadoideae (593 obs) excluded because < 1000
+```
+
+### Implementation Considerations
+
+- Filter in SQL query using HAVING clause for better performance
+- Should this filter on `observation_count`, `species_count`, or both?
+- Probably just observation_count is most useful
+- Consider also `--min-species` for filtering by species diversity
+- Add to query generation in `generate_breakdown_query()`
+
+### Use Cases
+
+- Focus on major taxonomic groups when exploring large families
+- Remove rarely-observed taxa from output
+- Make large breakdowns more readable by excluding noise
+
+## Hyperlinks to iNaturalist Taxon Pages
+
+Add clickable hyperlinks to iNaturalist taxon pages in the breakdown output.
+
+### Proposed Behavior
+
+Include a column with URLs to the iNaturalist taxon page:
+
+```bash
+taxa breakdown Rosaceae
+subfamily        observation_count  species_count  url
+Amygdaloideae    14534             39             https://www.inaturalist.org/taxa/[ID]
+Dryadoideae      593               1              https://www.inaturalist.org/taxa/[ID]
+Rosoideae        28348             31             https://www.inaturalist.org/taxa/[ID]
+```
+
+### Alternative: Terminal Hyperlinks
+
+Use OSC 8 escape sequences to make the taxon name itself clickable (if terminal supports it):
+
+```bash
+taxa breakdown Rosaceae
+# Amygdaloideae would be a clickable link in supporting terminals
+# Falls back to plain text in non-supporting terminals
+```
+
+### Implementation Considerations
+
+- Need to include taxon ID in the breakdown query
+- iNaturalist URL format: `https://www.inaturalist.org/taxa/{id}`
+- For OSC 8 hyperlinks: `\033]8;;{url}\033\\{text}\033]8;;\033\\`
+- Most modern terminals support OSC 8 (iTerm2, Terminal.app, Windows Terminal, etc.)
+- Consider making URLs opt-in with `--show-urls` flag
+- For NULL rows, omit the URL (no taxon to link to)
+
+### Use Cases
+
+- Quick navigation to iNaturalist for more details about a taxon
+- See photos, maps, and full taxonomy information
+- Verify identification or learn more about unfamiliar taxa
