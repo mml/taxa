@@ -374,6 +374,11 @@ def test_breakdown_command_empty_results():
             INSERT INTO taxa (id, scientific_name, rank, family)
             VALUES (1, 'Asteraceae', 'family', 'Asteraceae')
         """)
+        # Insert a descendant taxon so auto-fallthrough can find a populated rank
+        cursor.execute("""
+            INSERT INTO taxa (id, scientific_name, rank, family, subfamily)
+            VALUES (2, 'Asteroideae', 'subfamily', 'Asteraceae', 'Asteroideae')
+        """)
         conn.commit()
         conn.close()
 
