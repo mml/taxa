@@ -191,6 +191,65 @@ Asteroideae     Astereae        8901                    156
 
 Rows with NULL in lower-level columns are subtotals for the parent level.
 
+## Shell Completion
+
+Taxa supports intelligent tab completion for zsh shells with dynamic suggestions from your database.
+
+### Installation
+
+Install completion support:
+
+```bash
+taxa completion install
+```
+
+Then add to your `~/.zshrc`:
+
+```bash
+fpath=(~/.config/taxa/completions $fpath)
+autoload -Uz compinit && compinit
+```
+
+Reload your shell:
+
+```bash
+exec zsh
+```
+
+### Features
+
+- Complete taxon names from your database
+- Complete region keys
+- Complete taxonomic ranks for `--levels` option
+- Complete file paths for `--database` and config files
+- Automatic cache refresh when database changes
+
+### Manual Cache Refresh
+
+The cache updates automatically when the database changes. To manually regenerate:
+
+```bash
+taxa completion generate-cache
+```
+
+### Requirements
+
+- `jq` command-line JSON processor for dynamic completions
+- Without `jq`, static completions (commands and options) still work
+
+Install jq:
+
+```bash
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt-get install jq
+
+# Fedora
+sudo dnf install jq
+```
+
 ## Development
 
 ```bash
