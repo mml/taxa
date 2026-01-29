@@ -260,3 +260,125 @@ def test_sync_command_keyboard_interrupt():
 
         assert result.exit_code == 1
         assert 'interrupted' in result.output.lower()
+
+
+def test_breakdown_command_help():
+    """Test that breakdown command help works."""
+    runner = CliRunner()
+    result = runner.invoke(main, ['breakdown', '--help'])
+    assert result.exit_code == 0
+    assert 'breakdown' in result.output.lower()
+    assert '--levels' in result.output
+    assert '--region' in result.output
+
+
+def test_breakdown_command_basic():
+    """Test basic breakdown command execution."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Create test database with sample data
+        import sqlite3
+        from taxa.schema import create_schema
+
+        conn = sqlite3.connect('test.db')
+        create_schema(conn)
+
+        # Insert test taxa
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO taxa (id, scientific_name, rank, family, subfamily)
+            VALUES (1, 'Plant 1', 'species', 'Asteraceae', 'Asteroideae')
+        """)
+        cursor.execute("""
+            INSERT INTO observations (taxon_id, region_key, place_id, observation_count)
+            VALUES (1, 'test', 1, 100)
+        """)
+        conn.commit()
+        conn.close()
+
+        result = runner.invoke(main, ['breakdown', 'Asteraceae', '--database', 'test.db'])
+
+        assert result.exit_code == 0
+        assert 'Asteroideae' in result.output
+        assert 'observation_count' in result.output
+
+
+def test_breakdown_command_taxon_not_found():
+    """Test breakdown with non-existent taxon."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        from taxa.schema import create_schema
+
+        conn = sqlite3.connect('test.db')
+        create_schema(conn)
+        conn.close()
+
+        result = runner.invoke(main, ['breakdown', 'NotARealTaxon', '--database', 'test.db'])
+
+        assert result.exit_code == 1
+        assert 'not found' in result.output
+
+
+def test_breakdown_command_invalid_level():
+    """Test breakdown with invalid level specification."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        from taxa.schema import create_schema
+
+        conn = sqlite3.connect('test.db')
+        create_schema(conn)
+
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO taxa (id, scientific_name, rank, family)
+            VALUES (1, 'Asteraceae', 'family', 'Asteraceae')
+        """)
+        conn.commit()
+        conn.close()
+
+        # Try to break down to higher rank
+        result = runner.invoke(main, [
+            'breakdown', 'Asteraceae',
+            '--levels', 'kingdom',
+            '--database', 'test.db'
+        ])
+
+        assert result.exit_code == 1
+        assert 'not below' in result.output
+
+
+def test_breakdown_command_database_not_found():
+    """Test breakdown with missing database."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        result = runner.invoke(main, ['breakdown', 'Asteraceae', '--database', 'missing.db'])
+
+        assert result.exit_code == 1
+        assert 'Database not found' in result.output
+
+
+def test_breakdown_command_empty_results():
+    """Test breakdown with no matching observations."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        from taxa.schema import create_schema
+
+        conn = sqlite3.connect('test.db')
+        create_schema(conn)
+
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO taxa (id, scientific_name, rank, family)
+            VALUES (1, 'Asteraceae', 'family', 'Asteraceae')
+        """)
+        conn.commit()
+        conn.close()
+
+        # No observations inserted, should get empty result
+        result = runner.invoke(main, ['breakdown', 'Asteraceae', '--database', 'test.db'])
+
+        assert result.exit_code == 0
+        assert 'No observations found' in result.output

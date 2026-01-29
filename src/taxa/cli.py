@@ -7,6 +7,8 @@ from pathlib import Path
 import pyinaturalist
 from taxa.config import Config, ConfigError
 from taxa.sync import sync_database
+from taxa.breakdown import find_taxon_rank, generate_breakdown_query
+from taxa.taxonomy import get_next_ranks, validate_rank_sequence
 from pyinaturalist import get_places_autocomplete, get_taxa_autocomplete
 
 # Set user agent to comply with iNaturalist API best practices
@@ -158,6 +160,70 @@ def info(database):
         click.echo(f"Region-taxon combinations: {obs_count:,}")
         click.echo(f"Total observations: {total_obs:,}")
 
+    except sqlite3.Error as e:
+        click.echo(f"ERROR: Database error: {e}", err=True)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+
+@main.command()
+@click.argument('taxon_name')
+@click.option('--levels', help='Comma-separated list of taxonomic levels to show')
+@click.option('--region', help='Filter to specific region')
+@click.option('--database', '-d', default='flora.db', help='Database file path')
+def breakdown(taxon_name, levels, region, database):
+    """Break down a taxon into hierarchical levels with observation counts."""
+    if not Path(database).exists():
+        click.echo(f"ERROR: Database not found: {database}", err=True)
+        click.echo("Run 'taxa sync' first to create the database")
+        sys.exit(1)
+
+    try:
+        conn = sqlite3.connect(database)
+
+        # Auto-detect taxon rank
+        base_rank = find_taxon_rank(conn, taxon_name)
+
+        # Parse levels or use default (next 1 level)
+        if levels:
+            level_list = [level.strip() for level in levels.split(',')]
+            validate_rank_sequence(base_rank, level_list)
+        else:
+            level_list = get_next_ranks(base_rank, count=1)
+            if not level_list:
+                click.echo(f"ERROR: No levels below '{base_rank}' in taxonomy", err=True)
+                sys.exit(1)
+
+        # Generate and execute query
+        query, params = generate_breakdown_query(
+            base_taxon=taxon_name,
+            base_rank=base_rank,
+            levels=level_list,
+            region_key=region
+        )
+
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+
+        if not results:
+            click.echo(f"No observations found for {taxon_name}" +
+                      (f" in region '{region}'" if region else ""))
+            sys.exit(0)
+
+        # Print column headers
+        if cursor.description:
+            headers = [desc[0] for desc in cursor.description]
+            click.echo('\t'.join(headers))
+
+        # Print results
+        for row in results:
+            click.echo('\t'.join(str(val) if val is not None else 'NULL' for val in row))
+
+    except ValueError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
     except sqlite3.Error as e:
         click.echo(f"ERROR: Database error: {e}", err=True)
         sys.exit(1)
