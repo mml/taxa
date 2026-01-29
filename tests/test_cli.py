@@ -382,3 +382,47 @@ def test_breakdown_command_empty_results():
 
         assert result.exit_code == 0
         assert 'No observations found' in result.output
+
+
+def test_breakdown_command_auto_fallthrough(sample_db, cli_runner):
+    """Breakdown without --levels skips unpopulated ranks and shows notice."""
+    result = cli_runner.invoke(
+        main,
+        ['breakdown', 'Dryadoideae', '--database', sample_db]
+    )
+
+    assert result.exit_code == 0
+    # Should show genus (not tribe which is NULL)
+    assert 'genus' in result.output
+    assert 'Cercocarpus' in result.output
+    # Should show notice to stderr
+    assert '[Notice: tribe unpopulated, showing genus instead]' in result.stderr
+
+
+def test_breakdown_command_explicit_levels_show_null(sample_db, cli_runner):
+    """Breakdown with explicit --levels shows NULL values without fallthrough."""
+    result = cli_runner.invoke(
+        main,
+        ['breakdown', 'Dryadoideae', '--levels', 'tribe', '--database', sample_db]
+    )
+
+    assert result.exit_code == 0
+    # Should show tribe (even though it's NULL)
+    assert 'tribe' in result.output
+    assert 'NULL' in result.output
+    # Should NOT show notice to stderr
+    assert '[Notice:' not in result.stderr
+
+
+def test_breakdown_command_no_notice_when_next_rank_populated(sample_db, cli_runner):
+    """Breakdown shows no notice when next rank is populated."""
+    result = cli_runner.invoke(
+        main,
+        ['breakdown', 'Rosaceae', '--database', sample_db]
+    )
+
+    assert result.exit_code == 0
+    # Should show subfamily (which is populated)
+    assert 'subfamily' in result.output
+    # Should NOT show notice since we didn't skip
+    assert '[Notice:' not in result.stderr

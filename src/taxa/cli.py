@@ -7,7 +7,7 @@ from pathlib import Path
 import pyinaturalist
 from taxa.config import Config, ConfigError
 from taxa.sync import sync_database
-from taxa.breakdown import find_taxon_rank, generate_breakdown_query
+from taxa.breakdown import find_taxon_rank, generate_breakdown_query, find_first_populated_rank
 from taxa.taxonomy import get_next_ranks, validate_rank_sequence
 from taxa.completion import generate_completion_cache, write_completion_cache, get_cache_path
 from pyinaturalist import get_places_autocomplete, get_taxa_autocomplete
@@ -186,14 +186,27 @@ def breakdown(taxon_name, levels, region, database):
         # Auto-detect taxon rank
         base_rank = find_taxon_rank(conn, taxon_name)
 
-        # Parse levels or use default (next 1 level)
+        # Parse levels or use smart default
         if levels:
+            # Explicit levels - use as-is
             level_list = [level.strip() for level in levels.split(',')]
             validate_rank_sequence(base_rank, level_list)
         else:
-            level_list = get_next_ranks(base_rank, count=1)
-            if not level_list:
-                click.echo(f"ERROR: No levels below '{base_rank}' in taxonomy", err=True)
+            # Smart default - find first populated rank
+            try:
+                populated_rank, expected_rank = find_first_populated_rank(
+                    conn, taxon_name, base_rank
+                )
+                level_list = [populated_rank]
+
+                # Show notice if we skipped ranks
+                if populated_rank != expected_rank:
+                    click.echo(
+                        f"[Notice: {expected_rank} unpopulated, showing {populated_rank} instead]",
+                        err=True
+                    )
+            except ValueError as e:
+                click.echo(f"ERROR: {e}", err=True)
                 sys.exit(1)
 
         # Generate and execute query
