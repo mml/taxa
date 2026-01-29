@@ -151,26 +151,22 @@ def test_fetch_regional_taxa_single_page():
         assert mock_retry.call_count == 1
 
 
-def test_fetch_regional_taxa_pagination():
-    """Test pagination when results span multiple pages."""
+def test_fetch_regional_taxa_large_result_set():
+    """Test fetching when API returns more than typical per_page limit."""
     with patch('taxa.fetcher.with_retry') as mock_retry:
-        # Mock two pages of results (full page size = 200)
-        mock_retry.side_effect = [
-            {
-                'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(200)]
-            },
-            {
-                'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(200, 250)]
-            }
-        ]
+        # The API returns all results at once, even if more than typical page size
+        # (e.g., Fabaceae in Sonoma County returns 241 results in one response)
+        mock_retry.return_value = {
+            'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(250)]
+        }
 
         result = fetch_regional_taxa(taxon_id=922110, place_id=2764)
 
-        # Should return all taxa from both pages
+        # Should return all taxa from single API call
         assert len(result) == 250
 
-        # Should have called API 2 times (second page has < 200 results, so we stop)
-        assert mock_retry.call_count == 2
+        # Should have called API only once (no pagination support)
+        assert mock_retry.call_count == 1
 
 
 def test_fetch_regional_taxa_empty():
@@ -185,3 +181,48 @@ def test_fetch_regional_taxa_empty():
 
         # Should have called API once
         assert mock_retry.call_count == 1
+
+
+def test_fetch_regional_taxa_progress_callback():
+    """Test that progress callback is called after fetching."""
+    with patch('taxa.fetcher.with_retry') as mock_retry:
+        # Mock API returning all results in one response (no pagination support)
+        mock_retry.return_value = {
+            'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(241)]
+        }
+
+        # Track progress callback invocations
+        progress_calls = []
+        def progress_callback(page, fetched_so_far):
+            progress_calls.append((page, fetched_so_far))
+
+        result = fetch_regional_taxa(
+            taxon_id=922110,
+            place_id=2764,
+            progress_callback=progress_callback
+        )
+
+        # Should return all taxa
+        assert len(result) == 241
+
+        # Progress callback should be called once (no pagination)
+        assert len(progress_calls) == 1
+        assert progress_calls[0] == (1, 241)
+
+
+def test_fetch_regional_taxa_no_infinite_loop_on_non_paginated_results():
+    """Test that we don't loop infinitely when API returns all results at once."""
+    with patch('taxa.fetcher.with_retry') as mock_retry:
+        # Mock API that ignores page parameter and returns same 241 results every time
+        # (simulating actual behavior of /v1/observations/taxonomy endpoint)
+        mock_retry.return_value = {
+            'results': [{'id': i, 'name': f'Taxon {i}'} for i in range(241)]
+        }
+
+        result = fetch_regional_taxa(taxon_id=922110, place_id=2764)
+
+        # Should call API only once, not loop infinitely
+        assert mock_retry.call_count == 1
+
+        # Should return the 241 unique taxa (not duplicates)
+        assert len(result) == 241

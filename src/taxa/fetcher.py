@@ -1,5 +1,5 @@
 """Fetch taxonomic data from iNaturalist API."""
-from typing import Iterator, Dict, Any, Optional, List
+from typing import Iterator, Dict, Any, Optional, List, Callable
 from pyinaturalist import get_taxa, get_observation_taxonomy
 
 from taxa.retry import with_retry
@@ -96,52 +96,44 @@ def fetch_taxon_descendants(
 def fetch_regional_taxa(
     taxon_id: int,
     place_id: int,
-    quality_grade: Optional[str] = None
+    quality_grade: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[Dict[str, Any]]:
     """
     Fetch all taxa with observations in a region at any rank.
 
     Uses the /v1/observations/taxonomy endpoint to discover which taxa
-    actually occur in a specific place. Handles pagination automatically.
+    actually occur in a specific place.
+
+    Note: This endpoint returns all results in a single response and does not
+    support pagination. The page parameter is ignored by the API.
 
     Args:
         taxon_id: iNaturalist taxon ID (root taxon to search under)
         place_id: iNaturalist place ID (geographic region)
         quality_grade: Filter by quality (research, needs_id, casual, or None)
+        progress_callback: Optional callback called after fetch: callback(page, fetched_count)
 
     Returns:
         List of taxon dictionaries with observation counts
     """
-    all_taxa = []
-    page = 1
-    per_page = 200  # Maximum supported by API
+    params = {
+        'taxon_id': taxon_id,
+        'place_id': place_id,
+    }
 
-    while True:
-        params = {
-            'taxon_id': taxon_id,
-            'place_id': place_id,
-            'per_page': per_page,
-            'page': page
-        }
+    if quality_grade:
+        params['quality_grade'] = quality_grade
 
-        if quality_grade:
-            params['quality_grade'] = quality_grade
+    response = with_retry(
+        get_observation_taxonomy,
+        **params
+    )
 
-        response = with_retry(
-            get_observation_taxonomy,
-            **params
-        )
+    results = response.get('results', [])
 
-        results = response.get('results', [])
-        if not results:
-            break
+    # Call progress callback after fetch
+    if progress_callback:
+        progress_callback(1, len(results))
 
-        all_taxa.extend(results)
-
-        # Check if we've fetched everything
-        if len(results) < per_page:
-            break
-
-        page += 1
-
-    return all_taxa
+    return results
