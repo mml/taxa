@@ -1,5 +1,6 @@
 """SQLite schema creation for taxa database."""
 import sqlite3
+from taxa.taxonomy import TAXONOMIC_RANKS
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -11,8 +12,11 @@ def create_schema(conn: sqlite3.Connection) -> None:
     """
     cursor = conn.cursor()
 
+    # Build rank columns dynamically from TAXONOMIC_RANKS
+    rank_columns = ',\n            '.join(f"{rank} TEXT" for rank in TAXONOMIC_RANKS)
+
     # Taxa table with wide schema (all ranks as columns)
-    cursor.execute("""
+    cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS taxa (
             id INTEGER PRIMARY KEY,
             scientific_name TEXT NOT NULL,
@@ -20,22 +24,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
             rank TEXT NOT NULL,
 
             -- All possible taxonomic ranks
-            kingdom TEXT,
-            phylum TEXT,
-            class TEXT,
-            order_name TEXT,
-            family TEXT,
-            subfamily TEXT,
-            tribe TEXT,
-            subtribe TEXT,
-            genus TEXT,
-            subgenus TEXT,
-            section TEXT,
-            subsection TEXT,
-            species TEXT,
-            subspecies TEXT,
-            variety TEXT,
-            form TEXT,
+            {rank_columns},
 
             -- Metadata
             is_active BOOLEAN,
