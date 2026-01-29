@@ -88,8 +88,10 @@ def generate_breakdown_query(base_taxon, base_rank, levels, region_key=None):
         params = [base_taxon]
 
         # Add NOT NULL checks for all levels we're grouping by
-        for col in group_cols:
-            where_parts.append(f"{col} IS NOT NULL")
+        # Skip this for single-level breakdowns to allow grouping of NULL values
+        if len(levels) > 1:
+            for col in group_cols:
+                where_parts.append(f"{col} IS NOT NULL")
 
         # Add region filter if specified
         if region_key:

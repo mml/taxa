@@ -113,3 +113,56 @@ def test_breakdown_with_region_filter_integration(populated_db):
 
     # Should still have results for test_region
     assert len(results) > 0
+
+
+def test_breakdown_with_all_null_values_at_level():
+    """Test single-level breakdown when all taxa have NULL at requested level.
+
+    Reproduces the Dryadoideae bug: when all taxa in a group have NULL
+    at the breakdown level, should return one row with NULL value showing
+    total observations, not zero rows.
+    """
+    db_path = Path(':memory:')
+    conn = sqlite3.connect(str(db_path))
+    create_schema(conn)
+    cursor = conn.cursor()
+
+    # Create subfamily with no tribe values (like Dryadoideae)
+    cursor.execute("""
+        INSERT INTO taxa (id, scientific_name, rank, family, subfamily, genus)
+        VALUES (1, 'Cercocarpus', 'genus', 'Rosaceae', 'Dryadoideae', 'Cercocarpus')
+    """)
+    cursor.execute("""
+        INSERT INTO taxa (id, scientific_name, rank, family, subfamily, genus)
+        VALUES (2, 'Cercocarpus betuloides', 'species', 'Rosaceae', 'Dryadoideae', 'Cercocarpus')
+    """)
+
+    # Add observations
+    cursor.execute("""
+        INSERT INTO observations (taxon_id, region_key, place_id, observation_count)
+        VALUES (1, 'test', 1, 400)
+    """)
+    cursor.execute("""
+        INSERT INTO observations (taxon_id, region_key, place_id, observation_count)
+        VALUES (2, 'test', 1, 193)
+    """)
+
+    conn.commit()
+
+    # Break down by tribe (all NULL)
+    query, params = generate_breakdown_query(
+        base_taxon='Dryadoideae',
+        base_rank='subfamily',
+        levels=['tribe']
+    )
+
+    cursor.execute(query, params)
+    results = cursor.fetchall()
+
+    # Should get one row with tribe=NULL and total observations
+    assert len(results) == 1
+    assert results[0][0] is None  # tribe column
+    assert results[0][1] == 593  # observation_count
+    assert results[0][2] == 1  # species_count
+
+    conn.close()
