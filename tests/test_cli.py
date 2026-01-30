@@ -408,7 +408,7 @@ def test_breakdown_command_explicit_levels_show_null(sample_db, cli_runner):
     """Breakdown with explicit --levels shows NULL values without fallthrough."""
     result = cli_runner.invoke(
         main,
-        ['breakdown', 'Dryadoideae', '--levels', 'tribe', '--database', sample_db]
+        ['breakdown', 'Dryadoideae', '--levels', 'tribe', '--show-null', '--database', sample_db]
     )
 
     assert result.exit_code == 0
@@ -431,3 +431,69 @@ def test_breakdown_command_no_notice_when_next_rank_populated(sample_db, cli_run
     assert 'subfamily' in result.output
     # Should NOT show notice since we didn't skip
     assert '[Notice:' not in result.stderr
+
+
+def test_breakdown_command_with_table_format(mocker, sample_db):
+    """breakdown command supports --format table option."""
+    mock_output = mocker.patch('taxa.cli.output_results')
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ['breakdown', 'Rosaceae', '--format', 'table', '-d', sample_db]
+    )
+
+    assert result.exit_code == 0
+    mock_output.assert_called_once()
+    call_kwargs = mock_output.call_args[1]
+    assert call_kwargs['format'] == 'table'
+    assert call_kwargs['show_null'] is False
+
+
+def test_breakdown_command_with_csv_format(mocker, sample_db):
+    """breakdown command supports --format csv option."""
+    mock_output = mocker.patch('taxa.cli.output_results')
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ['breakdown', 'Rosaceae', '--format', 'csv', '-d', sample_db]
+    )
+
+    assert result.exit_code == 0
+    mock_output.assert_called_once()
+    call_kwargs = mock_output.call_args[1]
+    assert call_kwargs['format'] == 'csv'
+
+
+def test_breakdown_command_with_show_null_flag(mocker, sample_db):
+    """breakdown command supports --show-null flag."""
+    mock_output = mocker.patch('taxa.cli.output_results')
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ['breakdown', 'Rosaceae', '--show-null', '-d', sample_db]
+    )
+
+    assert result.exit_code == 0
+    mock_output.assert_called_once()
+    call_kwargs = mock_output.call_args[1]
+    assert call_kwargs['show_null'] is True
+
+
+def test_breakdown_command_default_format_is_auto(mocker, sample_db):
+    """breakdown command defaults to auto format."""
+    mock_output = mocker.patch('taxa.cli.output_results')
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ['breakdown', 'Rosaceae', '-d', sample_db]
+    )
+
+    assert result.exit_code == 0
+    mock_output.assert_called_once()
+    call_kwargs = mock_output.call_args[1]
+    assert call_kwargs['format'] == 'auto'
+    assert call_kwargs['show_null'] is False

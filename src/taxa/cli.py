@@ -10,6 +10,7 @@ from taxa.sync import sync_database
 from taxa.breakdown import find_taxon_rank, generate_breakdown_query, find_first_populated_rank
 from taxa.taxonomy import get_next_ranks, validate_rank_sequence
 from taxa.completion import generate_completion_cache, write_completion_cache, get_cache_path
+from taxa.formatting import output_results
 from pyinaturalist import get_places_autocomplete, get_taxa_autocomplete
 
 # Set user agent to comply with iNaturalist API best practices
@@ -173,7 +174,14 @@ def info(database):
 @click.option('--levels', help='Comma-separated list of taxonomic levels to show')
 @click.option('--region', help='Filter to specific region')
 @click.option('--database', '-d', default='flora.db', help='Database file path')
-def breakdown(taxon_name, levels, region, database):
+@click.option(
+    '--format',
+    type=click.Choice(['auto', 'table', 'csv'], case_sensitive=False),
+    default='auto',
+    help='Output format (default: auto-detect)'
+)
+@click.option('--show-null', is_flag=True, help='Show NULL instead of empty strings')
+def breakdown(taxon_name, levels, region, database, format, show_null):
     """Break down a taxon into hierarchical levels with observation counts."""
     if not Path(database).exists():
         click.echo(f"ERROR: Database not found: {database}", err=True)
@@ -226,14 +234,9 @@ def breakdown(taxon_name, levels, region, database):
                       (f" in region '{region}'" if region else ""))
             sys.exit(0)
 
-        # Print column headers
-        if cursor.description:
-            headers = [desc[0] for desc in cursor.description]
-            click.echo('\t'.join(headers))
-
-        # Print results
-        for row in results:
-            click.echo('\t'.join(str(val) if val is not None else 'NULL' for val in row))
+        # Format and output results
+        headers = [desc[0] for desc in cursor.description]
+        output_results(headers, results, format=format, show_null=show_null)
 
     except ValueError as e:
         click.echo(f"ERROR: {e}", err=True)
