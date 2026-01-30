@@ -23,6 +23,7 @@ pytest tests/ -v
 - `tests/` - Test files
 - `scripts/` - Utility scripts (like PoC performance test)
 - `venv/` - Virtual environment (DO NOT MODIFY)
+- `docs/` - Assorted documentation
 
 ## Dependencies
 
@@ -43,3 +44,11 @@ iNat has some [recommended practices](https://www.inaturalist.org/pages/api+reco
 We should incorporate these into every design decision, and consider them to
 be rules, unless an exception is documented here.  Ipso facto, Rule #1 applies
 to those practices not excepted below.
+
+## Realizing Feature Ideas
+
+We will often brainstorm and develop features from
+[feature-ideas.md](docs/feature-ideas.md).  Whenever writing an
+implementation plan, the final step in the plan should be to move that section
+from feature-ideas.md to
+[implemented-features.md](docs/implemented-features.md).
