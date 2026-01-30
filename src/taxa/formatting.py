@@ -81,3 +81,30 @@ def format_table(headers, rows, show_null=False):
 
     console = Console()
     console.print(table)
+
+
+def output_results(headers, rows, format='auto', show_null=False):
+    """Output results in the specified format.
+
+    Args:
+        headers: List of column header strings
+        rows: List of tuples containing row data
+        format: Output format - 'auto', 'table', 'csv', or 'tree' (future)
+        show_null: If True, render None as 'NULL'; if False, render as ''
+
+    Raises:
+        ValueError: If format is not recognized
+    """
+    # Resolve auto format
+    if format == 'auto':
+        format = detect_format()
+
+    # Dispatch to appropriate formatter
+    if format == 'table':
+        format_table(headers, rows, show_null=show_null)
+    elif format == 'csv':
+        format_csv(headers, rows, show_null=show_null)
+    elif format == 'tree':
+        raise NotImplementedError("Tree format not yet implemented")
+    else:
+        raise ValueError(f"Unknown format: {format}")

@@ -2,7 +2,7 @@
 import sys
 import io
 from unittest.mock import Mock
-from taxa.formatting import detect_format, transform_null, format_csv, format_table
+from taxa.formatting import detect_format, transform_null, format_csv, format_table, output_results
 
 
 def test_detect_format_returns_table_for_tty(mocker):
@@ -142,3 +142,63 @@ def test_format_table_prints_to_console(mocker):
     format_table(headers, rows, show_null=False)
 
     mock_console.print.assert_called_once_with(mock_table)
+
+
+def test_output_results_with_auto_format_tty(mocker):
+    """output_results uses table format for TTY."""
+    mock_format_table = mocker.patch('taxa.formatting.format_table')
+    mocker.patch('sys.stdout.isatty', return_value=True)
+
+    headers = ['name']
+    rows = [('Alice',)]
+
+    output_results(headers, rows, format='auto', show_null=False)
+
+    mock_format_table.assert_called_once_with(headers, rows, show_null=False)
+
+
+def test_output_results_with_auto_format_pipe(mocker):
+    """output_results uses CSV format for pipes."""
+    mock_format_csv = mocker.patch('taxa.formatting.format_csv')
+    mocker.patch('sys.stdout.isatty', return_value=False)
+
+    headers = ['name']
+    rows = [('Alice',)]
+
+    output_results(headers, rows, format='auto', show_null=False)
+
+    mock_format_csv.assert_called_once_with(headers, rows, show_null=False)
+
+
+def test_output_results_with_explicit_table_format(mocker):
+    """output_results respects explicit table format."""
+    mock_format_table = mocker.patch('taxa.formatting.format_table')
+    mocker.patch('sys.stdout.isatty', return_value=False)  # Even when piped
+
+    headers = ['name']
+    rows = [('Alice',)]
+
+    output_results(headers, rows, format='table', show_null=True)
+
+    mock_format_table.assert_called_once_with(headers, rows, show_null=True)
+
+
+def test_output_results_with_explicit_csv_format(mocker):
+    """output_results respects explicit CSV format."""
+    mock_format_csv = mocker.patch('taxa.formatting.format_csv')
+    mocker.patch('sys.stdout.isatty', return_value=True)  # Even in TTY
+
+    headers = ['name']
+    rows = [('Alice',)]
+
+    output_results(headers, rows, format='csv', show_null=False)
+
+    mock_format_csv.assert_called_once_with(headers, rows, show_null=False)
+
+
+def test_output_results_invalid_format_raises_error():
+    """output_results raises ValueError for invalid format."""
+    import pytest
+
+    with pytest.raises(ValueError, match="Unknown format: invalid"):
+        output_results(['name'], [('Alice',)], format='invalid', show_null=False)
