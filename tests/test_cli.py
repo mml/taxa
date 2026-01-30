@@ -86,11 +86,11 @@ def test_query_command_with_query():
 
         result = runner.invoke(main, ['query', 'SELECT * FROM test'])
         assert result.exit_code == 0
-        # Verify headers and data
+        # Verify headers and data (CSV format by default since CliRunner simulates non-TTY)
         lines = result.output.strip().split('\n')
-        assert lines[0] == 'id\tname'
-        assert '1\tfoo' in result.output
-        assert '2\tbar' in result.output
+        assert lines[0] == 'id,name'
+        assert '1,foo' in result.output
+        assert '2,bar' in result.output
 
 
 def test_query_command_without_query():
@@ -497,3 +497,51 @@ def test_breakdown_command_default_format_is_auto(mocker, sample_db):
     call_kwargs = mock_output.call_args[1]
     assert call_kwargs['format'] == 'auto'
     assert call_kwargs['show_null'] is False
+
+
+def test_query_command_with_format_option(mocker):
+    """query command supports --format option."""
+    mock_output = mocker.patch('taxa.cli.output_results')
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        conn = sqlite3.connect('test.db')
+        conn.execute('CREATE TABLE test (name TEXT, count INTEGER)')
+        conn.execute('INSERT INTO test VALUES ("Alice", 10)')
+        conn.commit()
+        conn.close()
+
+        result = runner.invoke(
+            main,
+            ['query', 'SELECT * FROM test', '--format', 'csv', '-d', 'test.db']
+        )
+
+    assert result.exit_code == 0
+    mock_output.assert_called_once()
+    call_kwargs = mock_output.call_args[1]
+    assert call_kwargs['format'] == 'csv'
+
+
+def test_query_command_with_show_null_option(mocker):
+    """query command supports --show-null option."""
+    mock_output = mocker.patch('taxa.cli.output_results')
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        import sqlite3
+        conn = sqlite3.connect('test.db')
+        conn.execute('CREATE TABLE test (name TEXT, count INTEGER)')
+        conn.execute('INSERT INTO test VALUES ("Alice", 10)')
+        conn.commit()
+        conn.close()
+
+        result = runner.invoke(
+            main,
+            ['query', 'SELECT * FROM test', '--show-null', '-d', 'test.db']
+        )
+
+    assert result.exit_code == 0
+    mock_output.assert_called_once()
+    call_kwargs = mock_output.call_args[1]
+    assert call_kwargs['show_null'] is True

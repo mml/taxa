@@ -43,7 +43,14 @@ def sync(config, timeout, dry_run):
 @main.command()
 @click.argument('query', required=False)
 @click.option('--database', '-d', default='flora.db', help='Database file path')
-def query(query, database):
+@click.option(
+    '--format',
+    type=click.Choice(['auto', 'table', 'csv'], case_sensitive=False),
+    default='auto',
+    help='Output format (default: auto-detect)'
+)
+@click.option('--show-null', is_flag=True, help='Show NULL instead of empty strings')
+def query(query, database, format, show_null):
     """Run SQL query against database or open interactive shell."""
     if not Path(database).exists():
         click.echo(f"ERROR: Database not found: {database}", err=True)
@@ -58,14 +65,11 @@ def query(query, database):
             cursor.execute(query)
             results = cursor.fetchall()
 
-            # Print column headers
+            # Format and output results
             if cursor.description:
                 headers = [desc[0] for desc in cursor.description]
-                click.echo('\t'.join(headers))
+                output_results(headers, results, format=format, show_null=show_null)
 
-            # Print results
-            for row in results:
-                click.echo('\t'.join(str(val) for val in row))
         except sqlite3.Error as e:
             click.echo(f"ERROR: {e}", err=True)
             sys.exit(1)
