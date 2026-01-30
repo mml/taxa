@@ -1,6 +1,7 @@
 """Tests for output formatting module."""
 import sys
-from taxa.formatting import detect_format, transform_null
+import io
+from taxa.formatting import detect_format, transform_null, format_csv
 
 
 def test_detect_format_returns_table_for_tty(mocker):
@@ -35,3 +36,47 @@ def test_transform_null_with_show_null_flag():
 def test_transform_null_preserves_values_with_show_null():
     """When show_null=True, non-NULL values still unchanged."""
     assert transform_null('foo', show_null=True) == 'foo'
+
+
+def test_format_csv_basic_output(capsys):
+    """CSV formatter outputs RFC 4180 compliant CSV."""
+    headers = ['name', 'count']
+    rows = [('Alice', 10), ('Bob', 20)]
+
+    format_csv(headers, rows, show_null=False)
+
+    captured = capsys.readouterr()
+    assert captured.out == 'name,count\nAlice,10\nBob,20\n'
+
+
+def test_format_csv_with_null_values(capsys):
+    """CSV formatter handles NULL values correctly."""
+    headers = ['name', 'count']
+    rows = [('Alice', None), (None, 20)]
+
+    format_csv(headers, rows, show_null=False)
+
+    captured = capsys.readouterr()
+    assert captured.out == 'name,count\nAlice,\n,20\n'
+
+
+def test_format_csv_with_show_null_flag(capsys):
+    """CSV formatter shows NULL when show_null=True."""
+    headers = ['name', 'count']
+    rows = [('Alice', None)]
+
+    format_csv(headers, rows, show_null=True)
+
+    captured = capsys.readouterr()
+    assert captured.out == 'name,count\nAlice,NULL\n'
+
+
+def test_format_csv_escapes_values_with_commas(capsys):
+    """CSV formatter properly escapes values containing commas."""
+    headers = ['name', 'description']
+    rows = [('Alice', 'Hello, world')]
+
+    format_csv(headers, rows, show_null=False)
+
+    captured = capsys.readouterr()
+    assert captured.out == 'name,description\nAlice,"Hello, world"\n'
