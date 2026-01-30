@@ -31,12 +31,25 @@ Already installed in venv via `pip install -e '.[dev]'`. No need to reinstall un
 
 ## Git Workflow
 
-We're in a git worktree at `.worktrees/regional-filtering` on branch `feature/regional-filtering`. All commits should follow conventional commit format.
+This project uses git worktrees for isolated feature development:
+
+- Worktrees are located in `.worktrees/` directory
+- Each worktree has its own fresh virtual environment
+- When creating a new worktree:
+  1. Create the worktree: `git worktree add .worktrees/<feature-name> -b feature/<feature-name>`
+  2. cd into the worktree
+  3. Create fresh venv: `python3 -m venv venv`
+  4. Install dependencies: `source venv/bin/activate && pip install -e '.[dev]'`
+  5. Verify tests pass as baseline
+
+**Current worktree:** `.worktrees/beautiful-output` on branch `feature/beautiful-output`
+
+All commits should follow conventional commit format.
 
 ## Current Task
 
-Implementing the regional filtering optimization per the plan at:
-`docs/plans/2026-01-28-regional-filtering-implementation.md`
+Implementing beautiful output formatting per the plan at:
+`docs/plans/2026-01-30-beautiful-output-implementation.md`
 
 ## Being a Good Neighbor
 
