@@ -183,3 +183,15 @@ taxa breakdown Rosaceae
 - Quick navigation to iNaturalist for more details about a taxon
 - See photos, maps, and full taxonomy information
 - Verify identification or learn more about unfamiliar taxa
+
+## Automatic Paging for Long Output
+
+Automatically invoke a pager (like `less`) when breakdown or query output exceeds terminal height. Prevents long results from scrolling past, similar to `git log` behavior. Would check output line count against terminal height and conditionally pipe to pager when in TTY mode.
+
+## Multi-Column Layout for Wide Terminals
+
+Use horizontal space efficiently by arranging breakdown results in multiple columns when the terminal is wide enough. Instead of one row per line, render items in 2-3-4 columns depending on terminal width. Uses `rich.columns.Columns` to create newspaper-style columnar layout that fits more data on screen.
+
+## Colorize Taxonomic Ranks
+
+Add color-coding to breakdown output to create visual hierarchy. Options include: color-code rank column values (genus=blue, species=green), color entire rows based on rank level, highlight high/low observation counts, or subtle syntax highlighting (bold headers, dimmed data). Deferred until basic table formatting is stable.
