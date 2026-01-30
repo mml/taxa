@@ -76,6 +76,38 @@ The tool complies with iNaturalist's recommended API practices (~1 req/sec, ~10k
 
 ### 4. Query the data
 
+```console
+% taxa breakdown Trifolieae
+[Notice: subtribe unpopulated, showing genus instead]
+╭───────────┬───────────────────┬───────────────╮
+│ genus     │ observation_count │ species_count │
+├───────────┼───────────────────┼───────────────┤
+│           │              4511 │             0 │
+│ Medicago  │              1508 │             4 │
+│ Melilotus │               570 │             3 │
+│ Trifolium │             15072 │            37 │
+╰───────────┴───────────────────┴───────────────╯
+
+% taxa breakdown Rosaceae --levels=subfamily,tribe
+╭───────────────┬──────────────┬───────────────────┬───────────────╮
+│ subfamily     │ tribe        │ observation_count │ species_count │
+├───────────────┼──────────────┼───────────────────┼───────────────┤
+│ Amygdaloideae │              │             14534 │            39 │
+│ Amygdaloideae │ Amygdaleae   │              1120 │            11 │
+│ Amygdaloideae │ Exochordeae  │               378 │             1 │
+│ Amygdaloideae │ Maleae       │              5667 │            24 │
+│ Amygdaloideae │ Neillieae    │               363 │             1 │
+│ Amygdaloideae │ Sorbarieae   │              2401 │             1 │
+│ Amygdaloideae │ Spiraeeae    │              1139 │             1 │
+│ Dryadoideae   │              │               593 │             1 │
+│ Rosoideae     │              │             28375 │            31 │
+│ Rosoideae     │ Agrimonieae  │               210 │             5 │
+│ Rosoideae     │ Potentilleae │              3936 │            11 │
+│ Rosoideae     │ Roseae       │              4137 │             7 │
+│ Rosoideae     │ Rubeae       │             15314 │             8 │
+╰───────────────┴──────────────┴───────────────────┴───────────────╯
+```
+
 ```bash
 # Run a SQL query
 taxa query "SELECT DISTINCT tribe FROM taxa WHERE subfamily = 'Amygdaloideae'"
